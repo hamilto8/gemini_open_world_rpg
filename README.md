@@ -93,8 +93,8 @@ godot --path .
 - [x] **Phase 0: Foundations** — Walking skeleton, autoloads, input contexts, save skeleton, perf HUD, validator.
 - [x] **Phase 1: On-Foot Core** — PlayerController, MovementMotor, Locomotion HSM, CameraRig, StatBlock, minimal HUD.
 - [x] **Phase 2: Items & Weapons** — InventoryModel, Equipment system, WeaponController (hitscan), upgrade/crafting bench.
-- [ ] **Phase 3: World & Streaming** — RegionDefinitions, cell lifecycle streamer, WorldStateStore, Terrain3D integration.
-- [ ] **Phase 4: Vehicles v1** — Possession loop, VehicleBody3D prototype, HandlingProfile.
+- [x] **Phase 3: World & Streaming** — RegionDefinitions, cell lifecycle streamer, WorldStateStore, Terrain3D integration.
+- [x] **Phase 4: Vehicles v1** — Possession loop, VehicleBody3D prototype, HandlingProfile.
 - [ ] **Phase 5: Time & Weather v1** — ScheduledEventRunner, Weather effects, gameplay stat modifiers.
 - [ ] **Phase 6: Quests, Dialogue & NPC Life** — Quest manager, Dialogic 2 bridge, schedule-driven NPC schedules, Combat AI.
 - [ ] **Phase 7: Systems Depth** — Full skill trees, cover-based AI, fast travel, music state machine.

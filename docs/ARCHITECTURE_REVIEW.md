@@ -68,6 +68,8 @@ graph TD
 * **[COMPLETED] Phase 0: Foundations:** Core project scaffolding, EventBus, Services locator, atomic SaveService skeleton, GameDirector state machine, PerfHUD, DebugConsole, and ContentValidator.
 * **[COMPLETED] Phase 1: On-Foot Core:** Character locomotion motor, state machine (Grounded/Airborne/Crouch/Sprint), aim camera interpolation, StatBlocks, and damage mitigation target dummy.
 * **[COMPLETED] Phase 2: Items & Weapons:** Stacking inventory containers, equipment slots, atomic transaction service, hitscan weapon controller, and upgrade bench.
+* **[COMPLETED] Phase 3: World & Streaming:** Cell loader interface, WorldStateStore deltas persistence, and WorldStreamerNode active/simulated/visual streaming rings.
+* **[COMPLETED] Phase 4: Vehicles v1:** Boarding/unboarding possession swap interface, handling profiles, fuel burn rates, and braking controls.
 
 ---
 
