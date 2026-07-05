@@ -1,8 +1,17 @@
-[gd_scene load_steps=4 format=3 uid="uid://c1y7v3e"]
+[gd_scene load_steps=7 format=3 uid="uid://c1y7v3e"]
 
 [ext_resource type="Script" path="res://scenes/game/Game.cs" id="1_script"]
-[ext_resource type="Script" path="res://src/Meridian/UI/PerfHud.cs" id="2_perfhud"]
-[ext_resource type="Script" path="res://src/Meridian/UI/DebugConsole.cs" id="3_console"]
+[ext_resource type="PackedScene" uid="uid://c6y7v3e" path="res://scenes/player/PlayerAvatar.tscn" id="2_avatar"]
+[ext_resource type="Script" path="res://src/Meridian/Combat/DummyTarget.cs" id="3_target"]
+[ext_resource type="Script" path="res://src/Meridian/UI/PerfHud.cs" id="4_perfhud"]
+[ext_resource type="Script" path="res://src/Meridian/UI/DebugConsole.cs" id="5_console"]
+[ext_resource type="Script" path="res://src/Meridian/UI/MinimalHud.cs" id="6_hud"]
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_target"]
+size = Vector3(1, 2, 1)
+
+[sub_resource type="BoxMesh" id="BoxMesh_target"]
+size = Vector3(1, 2, 1)
 
 [node name="Game" type="Node"]
 script = ExtResource("1_script")
@@ -12,8 +21,18 @@ script = ExtResource("1_script")
 [node name="DirectionalLight3D" type="DirectionalLight3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 0.707107, 0.707107, 0, -0.707107, 0.707107, 0, 10, 0)
 
-[node name="Camera3D" type="Camera3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 0.906308, 0.422618, 0, -0.422618, 0.906308, 0, 3, 6)
+[node name="PlayerAvatar" parent="." instance=ExtResource("2_avatar")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0)
+
+[node name="DummyTarget" type="StaticBody3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, -5)
+script = ExtResource("3_target")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="DummyTarget"]
+shape = SubResource("BoxShape3D_target")
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="DummyTarget"]
+mesh = SubResource("BoxMesh_target")
 
 [node name="UILayer" type="CanvasLayer" parent="."]
 
@@ -24,7 +43,7 @@ offset_left = 10.0
 offset_top = 10.0
 offset_right = 310.0
 offset_bottom = 160.0
-script = ExtResource("2_perfhud")
+script = ExtResource("4_perfhud")
 
 [node name="DebugConsole" type="Control" parent="UILayer"]
 layout_mode = 3
@@ -39,4 +58,13 @@ offset_right = 300.0
 offset_bottom = 150.0
 grow_horizontal = 2
 grow_vertical = 2
-script = ExtResource("3_console")
+script = ExtResource("5_console")
+
+[node name="MinimalHud" type="Control" parent="UILayer"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("6_hud")

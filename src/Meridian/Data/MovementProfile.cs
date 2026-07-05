@@ -1,0 +1,20 @@
+using Godot;
+
+namespace Meridian.Data;
+
+/// <summary>
+/// Immutable movement profile configuration data contract.
+/// Enforces Section 5.2 (MovementMotor) requirements.
+/// </summary>
+[GlobalClass]
+public partial class MovementProfile : Resource
+{
+    [Export] public float WalkSpeed { get; set; } = 2.5f;
+    [Export] public float RunSpeed { get; set; } = 5.0f;
+    [Export] public float SprintSpeed { get; set; } = 8.0f;
+    [Export] public float CrouchSpeed { get; set; } = 1.5f;
+    [Export] public float Acceleration { get; set; } = 30.0f;
+    [Export] public float Friction { get; set; } = 25.0f;
+    [Export] public float JumpVelocity { get; set; } = 5.5f;
+    [Export] public float GravityMultiplier { get; set; } = 1.0f;
+}

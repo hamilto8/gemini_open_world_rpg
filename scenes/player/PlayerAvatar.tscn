@@ -1,0 +1,47 @@
+[gd_scene load_steps=7 format=3 uid="uid://c6y7v3e"]
+
+[ext_resource type="Script" path="res://scenes/player/PlayerAvatar.cs" id="1_avatar"]
+[ext_resource type="Script" path="res://src/Meridian/Core/StatBlock.cs" id="2_stats"]
+[ext_resource type="Script" path="res://src/Meridian/Player/MovementMotor.cs" id="3_motor"]
+[ext_resource type="Resource" uid="uid://mprofile" path="res://data/progression/level_curves/default_movement.tres" id="4_profile"]
+[ext_resource type="Script" path="res://src/Meridian/Player/CameraRig.cs" id="5_camrig"]
+[ext_resource type="Script" path="res://src/Meridian/Player/Interactor.cs" id="6_interact"]
+
+[sub_resource type="CapsuleShape3D" id="CapsuleShape3D_1"]
+radius = 0.4
+height = 1.8
+
+[sub_resource type="CapsuleMesh" id="CapsuleMesh_1"]
+radius = 0.4
+height = 1.8
+
+[node name="PlayerAvatar" type="CharacterBody3D"]
+script = ExtResource("1_avatar")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.9, 0)
+shape = SubResource("CapsuleShape3D_1")
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.9, 0)
+mesh = SubResource("CapsuleMesh_1")
+
+[node name="StatBlock" type="Node" parent="."]
+script = ExtResource("2_stats")
+
+[node name="MovementMotor" type="Node" parent="."]
+script = ExtResource("3_motor")
+Profile = ExtResource("4_profile")
+
+[node name="CameraRig" type="SpringArm3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.5, 0)
+spring_length = 3.0
+script = ExtResource("5_camrig")
+
+[node name="Camera3D" type="Camera3D" parent="CameraRig"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 3)
+
+[node name="Interactor" type="RayCast3D" parent="CameraRig"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -0.5)
+target_position = Vector3(0, 0, -2.5)
+script = ExtResource("6_interact")
