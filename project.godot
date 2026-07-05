@@ -26,6 +26,7 @@ InputContextService="*res://src/Meridian/Input/InputContextServiceNode.cs"
 WorldClock="*res://src/Meridian/Environment/WorldClockNode.cs"
 WeatherSystem="*res://src/Meridian/Environment/WeatherSystemNode.cs"
 AudioDirector="*res://src/Meridian/Audio/AudioDirectorNode.cs"
+WorldStreamer="*res://src/Meridian/World/WorldStreamerNode.cs"
 
 [dotnet]
 

@@ -64,12 +64,18 @@ graph TD
     G --> H[Boot -> Menu -> Empty World Loop Verification]
 ```
 
-### Phase 0 Deliverables Checklist
-- [x] **Project Scaffolding:** Folder layout (`addons/`, `assets/`, `data/`, `scenes/`, `src/`, `shaders/`, `localization/`, `tests/`), `.gitignore`, `.gitattributes`, `Meridian.csproj`, `Directory.Build.props`, `.editorconfig`.
-- [x] **Core Primitives & Services:** `EventBus`, `Services` static locator, `IWorldClock`, `ISaveService`, `IGameDirector`, `IInputContextService`.
-- [x] **Input Context System:** Stack-based input routing (`OnFoot`, `Vehicle`, `UI`, `Dialogue`) ensuring clean modal input separation.
-- [x] **Save Skeleton:** Modular DTO contracts, atomic filesystem writes, JSON source generation, and `ISaveParticipant` registration.
-- [x] **GameDirector State Machine:** Manage app transitions (`Boot` -> `MainMenu` -> `Loading` -> `Playing` -> `Paused`).
-- [x] **Developer Tooling:** Always-on Performance HUD (frame timing, memory, draw calls, active entity counts) and interactive Debug Console.
-- [x] **Content Validator v0 & Automated Testing:** Headless index validation and unit test framework validating domain logic and save round-trips.
-- [x] **Walking Skeleton Loop:** Minimal playable loop booting from application initialization through main menu into an empty 3D world with full save/restore capabilities.
+### Phase Deliverables Status
+* **[COMPLETED] Phase 0: Foundations:** Core project scaffolding, EventBus, Services locator, atomic SaveService skeleton, GameDirector state machine, PerfHUD, DebugConsole, and ContentValidator.
+* **[COMPLETED] Phase 1: On-Foot Core:** Character locomotion motor, state machine (Grounded/Airborne/Crouch/Sprint), aim camera interpolation, StatBlocks, and damage mitigation target dummy.
+* **[COMPLETED] Phase 2: Items & Weapons:** Stacking inventory containers, equipment slots, atomic transaction service, hitscan weapon controller, and upgrade bench.
+
+---
+
+## 4. Architectural Patterns: Decoupled Headless Testing
+
+To solve the native crash issues typical in C# Godot unit testing (where instantiating any class derived from `Godot.Resource` or `Godot.Node` outside the running engine triggers a native backing exception), we enforce the **Interface-based Decoupling Pattern**:
+
+- **Domain Models Consume Interfaces:** Inventory and combat logic consume interfaces (`IItemDefinition`, `IEquippableBehavior`, `IWeaponDefinition`) instead of writing direct dependencies on concrete Godot Resource classes (`ItemResource`, `WeaponResource`).
+- **Resource Classes Implement Interfaces:** Concrete Godot resources inherit from `Godot.Resource` and implement their respective interface. They are used solely as serialized data containers in the editor.
+- **Pure C# Mocks in Unit Tests:** Headless unit tests instantiate pure C# mock classes (`BasicItemDefinition`, `BasicWeaponDefinition`) implementing the interfaces, allowing complete testing of inventory math, transactions, and combat pipelines in under 40 milliseconds without native Godot engine boots.
+
