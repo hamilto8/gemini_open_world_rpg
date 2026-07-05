@@ -1,0 +1,42 @@
+[gd_scene load_steps=4 format=3 uid="uid://c1y7v3e"]
+
+[ext_resource type="Script" path="res://scenes/game/Game.cs" id="1_script"]
+[ext_resource type="Script" path="res://src/Meridian/UI/PerfHud.cs" id="2_perfhud"]
+[ext_resource type="Script" path="res://src/Meridian/UI/DebugConsole.cs" id="3_console"]
+
+[node name="Game" type="Node"]
+script = ExtResource("1_script")
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+
+[node name="DirectionalLight3D" type="DirectionalLight3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 0.707107, 0.707107, 0, -0.707107, 0.707107, 0, 10, 0)
+
+[node name="Camera3D" type="Camera3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 0.906308, 0.422618, 0, -0.422618, 0.906308, 0, 3, 6)
+
+[node name="UILayer" type="CanvasLayer" parent="."]
+
+[node name="PerfHud" type="Control" parent="UILayer"]
+layout_mode = 3
+anchors_preset = 0
+offset_left = 10.0
+offset_top = 10.0
+offset_right = 310.0
+offset_bottom = 160.0
+script = ExtResource("2_perfhud")
+
+[node name="DebugConsole" type="Control" parent="UILayer"]
+layout_mode = 3
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -300.0
+offset_top = -150.0
+offset_right = 300.0
+offset_bottom = 150.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("3_console")
