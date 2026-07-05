@@ -13,7 +13,7 @@ namespace Meridian.Player;
 /// </summary>
 public partial class PlayerAvatar : CharacterBody3D, IPossessable
 {
-    private StatBlock? _stats;
+    private StatBlockNode? _stats;
     private MovementMotor? _motor;
     private CameraRig? _cameraRig;
     private Interactor? _interactor;
@@ -24,7 +24,7 @@ public partial class PlayerAvatar : CharacterBody3D, IPossessable
 
     public override void _Ready()
     {
-        _stats = GetNodeOrNull<StatBlock>("StatBlock");
+        _stats = GetNodeOrNull<StatBlockNode>("StatBlock");
         _motor = GetNodeOrNull<MovementMotor>("MovementMotor");
         _cameraRig = GetNodeOrNull<CameraRig>("CameraRig");
         _interactor = GetNodeOrNull<Interactor>("CameraRig/Interactor");

@@ -13,15 +13,15 @@ public partial class DummyTarget : StaticBody3D, IDamageable
     [Export] public string TargetName { get; set; } = "Training Dummy";
     [Export] public float BaseArmor { get; set; } = 5.0f;
 
-    private StatBlock? _stats;
+    private StatBlockNode? _stats;
 
     public override void _Ready()
     {
         // Add a local StatBlock component dynamically if missing
-        _stats = GetNodeOrNull<StatBlock>("StatBlock");
+        _stats = GetNodeOrNull<StatBlockNode>("StatBlock");
         if (_stats == null)
         {
-            _stats = new StatBlock { Name = "StatBlock" };
+            _stats = new StatBlockNode { Name = "StatBlock" };
             AddChild(_stats);
         }
 

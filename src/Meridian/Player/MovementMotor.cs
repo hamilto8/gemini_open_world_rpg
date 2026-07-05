@@ -14,7 +14,7 @@ public partial class MovementMotor : Node
     [Export] public MovementProfile? Profile { get; set; }
 
     private CharacterBody3D? _body;
-    private StatBlock? _stats;
+    private StatBlockNode? _stats;
 
     public override void _Ready()
     {
@@ -24,7 +24,7 @@ public partial class MovementMotor : Node
             GD.PrintErr("[MovementMotor] Parent node is not a CharacterBody3D!");
         }
 
-        _stats = GetParent().GetNodeOrNull<StatBlock>("StatBlock");
+        _stats = GetParent().GetNodeOrNull<StatBlockNode>("StatBlock");
     }
 
     /// <summary>

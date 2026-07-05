@@ -1,4 +1,3 @@
-using Godot;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -6,21 +5,20 @@ using System.Linq;
 namespace Meridian.Core;
 
 /// <summary>
-/// StatBlock component attached to characters, vehicles, and items.
-/// Manages base stats, caches modified values, and processes stat modifiers.
-/// Enforces Section 3.6 item 3 requirements.
+/// Pure C# StatBlock domain logic. Decoupled from Godot for headless testing.
+/// Manages base stats, caches modified values, and processes active modifiers.
+/// Enforces Section 3.6 item 3 and 3.2 layering guidelines.
 /// </summary>
-public partial class StatBlock : Node
+public class StatBlock
 {
     private readonly Dictionary<string, float> _baseValues = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, float> _cachedValues = new(StringComparer.OrdinalIgnoreCase);
     private readonly List<Modifier> _modifiers = new();
     private readonly HashSet<string> _dirtyStats = new(StringComparer.OrdinalIgnoreCase);
 
-    [Signal]
-    public delegate void StatChangedEventHandler(string statId, float newValue);
+    public event Action<string, float>? StatChanged;
 
-    public override void _Ready()
+    public StatBlock()
     {
         // Register default stats
         SetBaseStat("max_health", 100f);
@@ -41,7 +39,6 @@ public partial class StatBlock : Node
             return 0f;
         }
 
-        // If stat is dirty or not cached, recalculate
         if (_dirtyStats.Contains(statId) || !_cachedValues.ContainsKey(statId))
         {
             float baseVal = _baseValues[statId];
@@ -62,7 +59,7 @@ public partial class StatBlock : Node
         _baseValues[statId] = value;
         _dirtyStats.Add(statId);
         
-        EmitSignal(SignalName.StatChanged, statId, GetStat(statId));
+        StatChanged?.Invoke(statId, GetStat(statId));
     }
 
     public void AddModifier(Modifier modifier)
@@ -72,20 +69,7 @@ public partial class StatBlock : Node
         _modifiers.Add(modifier);
         _dirtyStats.Add(modifier.TargetStatId);
 
-        EmitSignal(SignalName.StatChanged, modifier.TargetStatId, GetStat(modifier.TargetStatId));
-    }
-
-    public void RemoveModifier(string sourceTag)
-    {
-        ArgumentException.ThrowIfNullOrEmpty(sourceTag);
-
-        var toRemove = _modifiers.Where(m => m.SourceTag.Equals(sourceTag, StringComparison.OrdinalIgnoreCase)).ToList();
-        foreach (var mod in toRemove)
-        {
-            _modifiers.Remove(mod);
-            _dirtyStats.Add(mod.TargetStatId);
-            EmitSignal(SignalName.StatChanged, mod.TargetStatId, GetStat(mod.TargetStatId));
-        }
+        StatChanged?.Invoke(modifier.TargetStatId, GetStat(modifier.TargetStatId));
     }
 
     public void RemoveModifier(Modifier modifier)
@@ -95,14 +79,23 @@ public partial class StatBlock : Node
         if (_modifiers.Remove(modifier))
         {
             _dirtyStats.Add(modifier.TargetStatId);
-            EmitSignal(SignalName.StatChanged, modifier.TargetStatId, GetStat(modifier.TargetStatId));
+            StatChanged?.Invoke(modifier.TargetStatId, GetStat(modifier.TargetStatId));
         }
     }
 
-    /// <summary>
-    /// Processes active modifiers, checking for duration-based expiries.
-    /// Uses absolute game clock time where possible.
-    /// </summary>
+    public void RemoveModifierBySource(string sourceTag)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(sourceTag);
+
+        var toRemove = _modifiers.Where(m => m.SourceTag.Equals(sourceTag, StringComparison.OrdinalIgnoreCase)).ToList();
+        foreach (var mod in toRemove)
+        {
+            _modifiers.Remove(mod);
+            _dirtyStats.Add(mod.TargetStatId);
+            StatChanged?.Invoke(mod.TargetStatId, GetStat(mod.TargetStatId));
+        }
+    }
+
     public void TickModifiers(double currentGameTimeMinutes)
     {
         var expired = _modifiers.Where(m => m.ExpiryTime.HasValue && currentGameTimeMinutes >= m.ExpiryTime.Value).ToList();
@@ -110,7 +103,7 @@ public partial class StatBlock : Node
         {
             _modifiers.Remove(mod);
             _dirtyStats.Add(mod.TargetStatId);
-            EmitSignal(SignalName.StatChanged, mod.TargetStatId, GetStat(mod.TargetStatId));
+            StatChanged?.Invoke(mod.TargetStatId, GetStat(mod.TargetStatId));
         }
     }
 }

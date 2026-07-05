@@ -1,7 +1,7 @@
 [gd_scene load_steps=7 format=3 uid="uid://c6y7v3e"]
 
 [ext_resource type="Script" path="res://scenes/player/PlayerAvatar.cs" id="1_avatar"]
-[ext_resource type="Script" path="res://src/Meridian/Core/StatBlock.cs" id="2_stats"]
+[ext_resource type="Script" path="res://src/Meridian/Core/StatBlockNode.cs" id="2_stats"]
 [ext_resource type="Script" path="res://src/Meridian/Player/MovementMotor.cs" id="3_motor"]
 [ext_resource type="Resource" uid="uid://mprofile" path="res://data/progression/level_curves/default_movement.tres" id="4_profile"]
 [ext_resource type="Script" path="res://src/Meridian/Player/CameraRig.cs" id="5_camrig"]
