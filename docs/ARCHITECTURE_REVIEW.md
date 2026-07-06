@@ -73,6 +73,7 @@ graph TD
 * **[COMPLETED] Phase 5: Time & Weather v1:** ScheduledEventRunner event tracking, WeatherProfile resources, and dynamic weather stat modifier pushes.
 * **[COMPLETED] Phase 6: Quests, Dialogue & NPC Life:** QuestManager objective evaluations, DialogueService branching conversations, and NpcLifeController hourly routines.
 * **[COMPLETED] Phase 7: Systems Depth:** ProgressionManager curves, FastTravelNetwork validations, and MusicManager dynamic tension crossfades.
+* **[COMPLETED] Phase 8: Content & Polish:** AudioCueProfile resources, FootstepMaterialDetector matching rules, and AccessibilitySettings toggles.
 
 ---
 
