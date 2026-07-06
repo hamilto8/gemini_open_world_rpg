@@ -71,6 +71,7 @@ graph TD
 * **[COMPLETED] Phase 3: World & Streaming:** Cell loader interface, WorldStateStore deltas persistence, and WorldStreamerNode active/simulated/visual streaming rings.
 * **[COMPLETED] Phase 4: Vehicles v1:** Boarding/unboarding possession swap interface, handling profiles, fuel burn rates, and braking controls.
 * **[COMPLETED] Phase 5: Time & Weather v1:** ScheduledEventRunner event tracking, WeatherProfile resources, and dynamic weather stat modifier pushes.
+* **[COMPLETED] Phase 6: Quests, Dialogue & NPC Life:** QuestManager objective evaluations, DialogueService branching conversations, and NpcLifeController hourly routines.
 
 ---
 

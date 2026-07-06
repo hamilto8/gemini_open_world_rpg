@@ -96,6 +96,6 @@ godot --path .
 - [x] **Phase 3: World & Streaming** — RegionDefinitions, cell lifecycle streamer, WorldStateStore, Terrain3D integration.
 - [x] **Phase 4: Vehicles v1** — Possession loop, VehicleBody3D prototype, HandlingProfile.
 - [x] **Phase 5: Time & Weather v1** — ScheduledEventRunner, Weather effects, gameplay stat modifiers.
-- [ ] **Phase 6: Quests, Dialogue & NPC Life** — Quest manager, Dialogic 2 bridge, schedule-driven NPC schedules, Combat AI.
+- [x] **Phase 6: Quests, Dialogue & NPC Life** — Quest manager, Dialogic 2 bridge, schedule-driven NPC schedules, Combat AI.
 - [ ] **Phase 7: Systems Depth** — Full skill trees, cover-based AI, fast travel, music state machine.
 - [ ] **Phase 8: Content & Polish** — Region authoring, audio cues, accessibility checklist, performance pass.
