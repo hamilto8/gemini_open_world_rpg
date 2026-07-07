@@ -232,3 +232,62 @@ Severity legend: **Critical** = broken at runtime or violates a load-bearing arc
 4. H4/H5 + M4 (save pipeline) as one unit, with round-trip tests.
 5. H1/H2 (combat raycast), H6, H7.
 6. M-tier structural items, then L-tier polish.
+
+---
+
+# Test Suite Review (addendum, 2026-07-06)
+
+Second pass focused on `tests/Meridian.Tests/` (17 test classes, 41 tests, all green): do the tests actually exercise the production code the design document says must be testable? The doc (§3.2) names the "most bug-prone systems — inventory transactions, quest branching, modifier math, save/restore" as the reason domain logic is plain C#. Verdict: the domain tests that exist are mostly real, but a meaningful subset are tautologies, several *pin* known production bugs as correct behavior, and the systems that shipped broken (vehicles, save restore dispatch, weather) are exactly the ones with no genuine coverage. The xUnit-instead-of-GoDotTest choice is properly recorded in ADR-0003 and is not a finding.
+
+## High
+
+### T1. Tautological tests that never invoke production code (false coverage)
+- **Files:** [DamagePipelineTests.cs](tests/Meridian.Tests/Combat/DamagePipelineTests.cs), [WeaponCombatTests.cs](tests/Meridian.Tests/Combat/WeaponCombatTests.cs), [VehicleTests.cs](tests/Meridian.Tests/Vehicles/VehicleTests.cs)
+- `MitigationPipeline_ShouldApplyMultiplierAndArmorCorrectly` computes `50 * 2 - 10` inline in the test body and asserts `90` — it never calls `DummyTarget.ApplyDamage` or any pipeline code (its own `MockDamageableTarget` is declared and never used). `WeaponController_Firing_ShouldConsumeAmmo` executes `weaponInstance.CurrentAmmo--` in the test and asserts 9 — it tests the `--` operator. `WeaponController_Reloading_...` re-implements `CompleteReload`'s algorithm inline instead of calling it. Both `VehicleTests` re-implement throttle/fuel math locally and never touch `VehicleAvatar`. These tests pass no matter what the production code does — which is precisely why C3/C4 (undrivable vehicle) and the H1 hit-zone bug shipped green.
+- **Root cause:** the logic under test lives inside Godot `Node` classes (`WeaponController`, `VehicleAvatar`, `DummyTarget`) that can't be instantiated headlessly (ADR-0003's own constraint).
+- **Fix direction:** extract the fire/reload cycle, damage mitigation, and vehicle throttle/fuel/brake integration into plain C# domain classes (e.g. `WeaponRuntime`, `DamagePipeline`, `VehicleMotorModel`) consumed by the thin Nodes, then rewrite these tests against the real code. Delete the inline-math tests rather than keeping them as decoys.
+
+### T2. Tests that pin or mask known production bugs
+- **Files/cases:**
+  - [SystemsDepthTests.cs](tests/Meridian.Tests/Progression/SystemsDepthTests.cs) `ProgressionManager_ShouldHandleLevelUps...` calls `stats.SetBaseStat("reload_speed", 1.0f)` *in the test* before unlocking `fast_reload`. Production never registers `reload_speed`, so the perk is a silent no-op (finding H3) — the test green-lights the bug by performing the setup the game is missing.
+  - [WeatherTests.cs](tests/Meridian.Tests/Environment/WeatherTests.cs) `Weather_StateModifiers_...` documents "-15% = -1.5" as a flat `Add` against a hand-picked base of 10 — encoding the percent-vs-flat confusion of H8. Meanwhile [ModifierSystemTests.cs](tests/Meridian.Tests/Core/ModifierSystemTests.cs) pins `PercentAdd` value `10f` = 10% (whole-percent). The suite thus asserts *both* conventions; whichever way H8 is resolved, one of these tests must consciously change.
+  - [SaveTests.cs](tests/Meridian.Tests/Core/SaveTests.cs) uses only participant ids (`"PlayerState"`, `"WorldFlags"`) that happen to satisfy `SaveService`'s substring dispatch. No test registers a participant with a non-matching id (e.g. `"WorldStateStore"`), so the H4 restore data-loss is invisible. [StreamerTests.cs](tests/Meridian.Tests/World/StreamerTests.cs) `CaptureAndRestoreState_ShouldRoundTripSerialization` hands the DTO object directly from `CaptureState()` to `RestoreState()`, bypassing SaveService JSON dispatch entirely — the only broken link in that chain is the one skipped.
+  - [InputContextServiceTests.cs](tests/Meridian.Tests/Input/InputContextServiceTests.cs) `IsActionAllowed_ShouldRespectActiveContext` asserts `vehicle_throttle` allowed / `move_forward` blocked in the Vehicle context — pinning the exact contract that makes vehicles undrivable (C3), because no test covers the `PlayerControllerNode`→`InputContextService` integration where the mismatch lives.
+- **Fix direction:** when fixing H3/H4/H8/C3, update these tests *deliberately* (they will fail or, worse, keep passing); add the missing adversarial cases listed in T4. A save round-trip test through actual JSON with a `"WorldStateStore"`-style id should be the first new test written.
+
+## Medium
+
+### T3. Shared static `Services` locator + default xUnit parallelism is a race hazard
+- **Files:** [ServicesTests.cs](tests/Meridian.Tests/Core/ServicesTests.cs), [InventoryTests.cs](tests/Meridian.Tests/Items/InventoryTests.cs), [EnvironmentTests.cs](tests/Meridian.Tests/Environment/EnvironmentTests.cs); no `xunit.runner.json` / `[CollectionDefinition]` in the project
+- xUnit runs test classes in parallel by default. Three test classes call `Services.Reset()` in ctor/`Dispose` against the process-global, **non-thread-safe** `Dictionary` inside `Services`, while domain classes under test in *other* classes (`InventoryModel.TriggerChanged`, `QuestManager`, `FastTravelNetwork`, `ProgressionManager.AddXp`) concurrently call `Services.TryGet<IEventBus>`. Today the collisions are mostly benign; as the suite grows this becomes intermittent corruption/flakes that are miserable to diagnose.
+- **Fix direction:** either serialize the affected classes into one xUnit collection (or disable parallelization project-wide), or — better, and more aligned with doc §3.5 — inject `IEventBus` into domain classes instead of having *domain-layer* code reach into the static locator at all (the doc reserves the locator for scene/service layers; domain classes silently depending on global state is itself a layering deviation worth fixing).
+
+### T4. Coverage gaps on the doc's named bug-prone systems
+No tests exist for any of the following (all headless-testable today, no extraction needed):
+- **StatBlock directly:** `TickModifiers` expiry, `RemoveModifierBySource`, dirty-cache recompute after base change, and — the H3 detector — a modifier targeting an unregistered stat.
+- **SaveService failure paths:** corrupt primary file with valid `.bak` (H5 claims fallback; a test proves it doesn't), `DeleteSave`, temp-file cleanup after a failed write, unknown participant id in the file, `LoadGame` on missing slot returning false (only the happy path is covered).
+- **ProgressionManager:** multi-level-up from one large `AddXp`, `MaxLevel` clamp, XP cost recomputation ordering across the level boundary, `UnlockPerk` with zero points, duplicate perk unlock.
+- **QuestManager:** multi-objective quests, mixed objective types, a second active quest completing mid-`IncrementObjective` (M5 enumeration hazard), desynced parallel arrays (M6 — currently throws `ArgumentOutOfRangeException`; a test should decide the intended behavior).
+- **InventoryModel:** stack splitting across `MaxStack` boundaries, exact-weight-limit boundary, `RemoveItem` spanning multiple stacks, the auto-stub-definition behavior (L7 — deliberate or not, it's load-bearing and untested).
+- **InventoryTransaction:** rollback of instance-carrying items losing payload (M17), multi-step failure after partial apply.
+- **LocomotionStateMachine:** sprint denied at zero stamina (the `currentStamina > 0` branch), the `Aiming` overlay flag, crouch-vs-jump precedence (crouch currently wins — intended?), `StateChanged` event emission, the walk/run threshold boundary (`2.51f`).
+- **WorldClock:** midnight rollover incrementing `DayCounter`, phase boundaries at hours 5/8/17/20, `SetTime` backwards within a day, and `SetTimeScale` — a test would immediately expose that the pure class's `_timeScale` is dead (L4).
+- **EventBus:** multiple handlers for one event, unsubscribe-during-publish reentrancy (the snapshot makes it safe — pin that), double `Dispose` idempotency.
+- **World streaming:** `ICellLoader` exists explicitly (per its own XML doc) to "permit unit tests to mock and simulate cell instancing," yet no test uses it — because the ring/lifecycle logic is embedded in `WorldStreamerNode._Process` (H7). Extract the lifecycle state machine into a pure class and test enter/exit/hysteresis transitions with a fake loader.
+- **EquipmentModel:** equipping an item whose behavior targets a different slot, replacing an occupied slot, items with no equippable behavior.
+
+## Low
+
+### T5. Test hygiene
+- [EnvironmentTests.cs](tests/Meridian.Tests/Environment/EnvironmentTests.cs) registers a real `SaveService(Path.GetTempPath())` in the locator that nothing under test uses (dead arrangement), and points it at the shared temp root rather than a per-test directory (the `SaveService` ctor creates directories as a side effect).
+- `DamagePipelineTests.MockDamageableTarget` is dead code (see T1).
+- `SystemsDepthTests`/`WeaponCombatTests`/`VehicleTests` depend on the `Basic*` mock classes shipped in the production assembly (already M14) — moving the mocks to the test project is a prerequisite for cleaning this up.
+- Float assertions use exact equality (`Assert.Equal(1.15f, ...)`); fine for today's exact arithmetic, but prefer the `Assert.Equal(expected, actual, precision)` overloads so intentional math changes don't cascade into brittle failures.
+- One-scenario-per-system smoke tests (`ContentPolishTests`, `QuestDialogueTests.NpcScheduler...`) assert only interior values, never boundary hours/edges — cheap to extend while writing T4 cases.
+
+## Test-suite fix order
+
+1. T2's save round-trip test through real JSON (exposes H4) and the modifier-convention decision test (forces H8 resolution) — write these *before* fixing the production bugs so the fixes have failing tests to turn green.
+2. T1: extract Node-bound logic to domain classes, replace tautology tests (pairs with C3/C4/H1 fixes).
+3. T3: serialize or de-static the locator usage before the suite grows.
+4. T4 backlog, highest-value first: StatBlock unregistered-stat, SaveService `.bak` fallback, QuestManager desynced arrays, streamer lifecycle extraction.
