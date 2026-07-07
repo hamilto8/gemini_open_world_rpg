@@ -61,11 +61,21 @@ public static class InputMapBootstrap
         AddKey("menu_open", Key.Escape);
         AddJoyButton("menu_open", JoyButton.Start);
 
+        // Hold to exit the vehicle: E (keyboard) or B (gamepad). Entry is a normal interact press.
+        AddKey("exit_vehicle", Key.E);
+        AddJoyButton("exit_vehicle", JoyButton.B);
+
         // Fire / aim: mouse buttons + gamepad triggers.
         AddMouseButton("fire", MouseButton.Left);
         AddJoyAxis("fire", JoyAxis.TriggerRight, 1.0f);
         AddMouseButton("aim", MouseButton.Right);
         AddJoyAxis("aim", JoyAxis.TriggerLeft, 1.0f);
+
+        // Vehicle throttle on the gamepad: Right Trigger accelerates, Left Trigger reverses.
+        // (Keyboard vehicle throttle stays W/S via move_forward/backward.)
+        AddJoyAxis("accelerate", JoyAxis.TriggerRight, 1.0f);
+        AddJoyAxis("reverse", JoyAxis.TriggerLeft, 1.0f);
+
         // Note: "look" is an InputContextService permission (gated via IsActionAllowed) and needs no
         // InputMap entry — mouse-look reads InputEventMouseMotion; stick-look reads look_* above.
 

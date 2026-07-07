@@ -101,13 +101,15 @@ public class InputContextService : IInputContextService
         // Vehicle defaults: the shared movement actions drive throttle (forward/back) and steering
         // (left/right) via InputFrame.MoveY/MoveX, plus a held brake and the exit interaction.
         // (Section 11.5 — vehicles reuse the possession/input pipeline, not a separate action set.)
-        RegisterActionForContext(InputContextType.Vehicle, "move_forward");
-        RegisterActionForContext(InputContextType.Vehicle, "move_backward");
+        RegisterActionForContext(InputContextType.Vehicle, "move_forward");   // W = accelerate
+        RegisterActionForContext(InputContextType.Vehicle, "move_backward");  // S = reverse
         RegisterActionForContext(InputContextType.Vehicle, "move_left");
         RegisterActionForContext(InputContextType.Vehicle, "move_right");
+        RegisterActionForContext(InputContextType.Vehicle, "accelerate");     // Right Trigger
+        RegisterActionForContext(InputContextType.Vehicle, "reverse");        // Left Trigger
         RegisterActionForContext(InputContextType.Vehicle, "brake");
         RegisterActionForContext(InputContextType.Vehicle, "look");
-        RegisterActionForContext(InputContextType.Vehicle, "interact");
+        RegisterActionForContext(InputContextType.Vehicle, "exit_vehicle");   // hold E / B to leave
         RegisterActionForContext(InputContextType.Vehicle, "menu_open");
 
         // UI defaults

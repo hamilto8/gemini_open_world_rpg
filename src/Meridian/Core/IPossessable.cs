@@ -31,6 +31,12 @@ public struct InputFrame
 
     /// <summary>Held brake input (vehicles). Distinct from <c>JumpPressed</c>, which is edge-triggered.</summary>
     public bool BrakeHeld;
+
+    /// <summary>Vehicle throttle in [-1, 1]: keyboard W/S plus gamepad Right/Left triggers.</summary>
+    public float VehicleThrottle;
+
+    /// <summary>Held "exit vehicle" input (E / B); the vehicle exits on a long press.</summary>
+    public bool ExitVehicleHeld;
 }
 
 /// <summary>

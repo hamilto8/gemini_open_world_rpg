@@ -47,8 +47,10 @@ public partial class WeaponPickup : StaticBody3D, IInteractable
             ReloadTime = ReloadTime,
         };
 
+        Services.TryGet<IInventoryProvider>(out var provider);
+
         // Register the ammo item type and stock some reserves so reloading works.
-        if (Services.TryGet<IInventoryProvider>(out var provider) && provider != null)
+        if (provider != null)
         {
             provider.Inventory.RegisterDefinition(MakeAmmoDefinition(AmmoTypeId));
             if (StartingReserveAmmo > 0)
@@ -58,9 +60,26 @@ public partial class WeaponPickup : StaticBody3D, IInteractable
         }
 
         var instance = new WeaponInstance(WeaponId + "_item", WeaponId) { CurrentAmmo = MagazineSize };
-        holder.EquipWeapon(instance, definition);
 
-        GD.Print($"[Pickup] Equipped {WeaponName} (+{StartingReserveAmmo} {AmmoTypeId}).");
+        // Auto-equip only when unarmed; otherwise stash the weapon in the pack (no swap UI yet).
+        if (provider?.EquippedWeapon == null)
+        {
+            holder.EquipWeapon(instance, definition);
+            GD.Print($"[Pickup] Equipped {WeaponName} (+{StartingReserveAmmo} {AmmoTypeId}).");
+        }
+        else if (provider != null)
+        {
+            provider.Inventory.RegisterDefinition(new ItemResource
+            {
+                Id = instance.DefinitionId,
+                DisplayName = WeaponName,
+                MaxStack = 1,
+                Weight = 3.0f,
+            });
+            provider.Inventory.AddItem(instance);
+            GD.Print($"[Pickup] Already armed — stored {WeaponName} in the pack.");
+        }
+
         QueueFree();
     }
 

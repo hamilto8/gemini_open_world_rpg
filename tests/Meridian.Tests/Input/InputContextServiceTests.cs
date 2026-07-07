@@ -48,12 +48,16 @@ public class InputContextServiceTests
         Assert.True(service.IsActionAllowed("move_forward"));
         Assert.False(service.IsActionAllowed("brake"));
 
-        // Push Vehicle context: movement actions drive throttle/steer, brake is held, jump is blocked.
+        // Push Vehicle context: movement/triggers drive throttle & steer, brake held, jump blocked,
+        // and leaving the vehicle is a held exit_vehicle (not the on-foot interact).
         service.PushContext(InputContextType.Vehicle);
-        Assert.True(service.IsActionAllowed("move_forward")); // drives throttle (C3)
+        Assert.True(service.IsActionAllowed("move_forward")); // W = throttle (C3)
+        Assert.True(service.IsActionAllowed("accelerate"));   // Right Trigger = throttle
+        Assert.True(service.IsActionAllowed("reverse"));      // Left Trigger = reverse
         Assert.True(service.IsActionAllowed("brake"));
+        Assert.True(service.IsActionAllowed("exit_vehicle")); // hold E / B to leave
         Assert.False(service.IsActionAllowed("jump"));
-        Assert.True(service.IsActionAllowed("interact")); // allowed in both (exit)
+        Assert.False(service.IsActionAllowed("interact"));    // interact is on-foot only now
 
         // Push UI context
         service.PushContext(InputContextType.UI);

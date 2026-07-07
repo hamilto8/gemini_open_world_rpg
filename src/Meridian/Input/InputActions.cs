@@ -27,15 +27,15 @@ public static class InputActions
     /// <summary>Fixed Xbox controller layout (button → what it does), for the reference panel.</summary>
     public static readonly (string Button, string Action)[] ControllerLayout =
     {
-        ("Left Stick", "Move"),
-        ("Right Stick", "Look / Aim camera"),
+        ("Left Stick", "Move / Steer"),
+        ("Right Stick", "Look"),
         ("R3 (click Right Stick)", "Run"),
-        ("A", "Jump"),
-        ("B", "Crouch"),
-        ("X", "Interact / Board"),
+        ("A", "Jump / Vehicle brake"),
+        ("B", "Crouch / Hold to exit vehicle"),
+        ("X", "Interact / Pick up / Enter vehicle"),
         ("Y", "Reload"),
-        ("Right Trigger", "Fire"),
-        ("Left Trigger", "Aim"),
+        ("Right Trigger", "Fire / Accelerate"),
+        ("Left Trigger", "Aim / Reverse"),
         ("Start", "Pause Menu"),
     };
 }

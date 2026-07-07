@@ -16,6 +16,9 @@ public partial class VehicleAvatar : CharacterBody3D, IPossessable, IInteractabl
     private const float SpeedEventEpsilon = 0.25f;
     private const float FuelEventEpsilon = 0.5f;
 
+    /// <summary>Seconds the exit input (E / B) must be held to leave the vehicle.</summary>
+    private const float ExitHoldSeconds = 0.6f;
+
     [Export] public HandlingProfile? ProfileResource { get; set; }
     [Export] public float MaxFuel { get; set; } = 100f;
     [Export] public float InitialFuel { get; set; } = 80f;
@@ -27,6 +30,8 @@ public partial class VehicleAvatar : CharacterBody3D, IPossessable, IInteractabl
     private IPlayerController? _possessingController;
     private Node3D? _boardedAvatar;
     private InputFrame _lastInput;
+    private float _exitHoldTime;
+    private bool _exitArmed;
 
     private float _lastPublishedSpeed = float.NaN;
     private float _lastPublishedFuel = float.NaN;
@@ -110,6 +115,11 @@ public partial class VehicleAvatar : CharacterBody3D, IPossessable, IInteractabl
         _lastPublishedSpeed = float.NaN;
         _lastPublishedFuel = float.NaN;
 
+        // Don't let the E/B press that boarded immediately count toward the exit hold — require a
+        // release first, then a fresh long-press to leave.
+        _exitArmed = false;
+        _exitHoldTime = 0f;
+
         // Couple the Vehicle input context to possession so a direct Possess() can't bypass it (V7).
         if (Services.TryGet<IInputContextService>(out var inputService) && inputService != null)
         {
@@ -145,19 +155,28 @@ public partial class VehicleAvatar : CharacterBody3D, IPossessable, IInteractabl
     {
         if (_possessingController == null) return;
 
-        // Exit request (Interact while possessing).
-        if (_lastInput.InteractPressed)
+        // Exit on a long-press of E / B (armed only once the input is released after boarding).
+        if (!_lastInput.ExitVehicleHeld)
         {
-            Unboard();
-            return;
+            _exitArmed = true;
+            _exitHoldTime = 0f;
+        }
+        else if (_exitArmed)
+        {
+            _exitHoldTime += (float)delta;
+            if (_exitHoldTime >= ExitHoldSeconds)
+            {
+                Unboard();
+                return;
+            }
         }
 
         if (_motor == null) return;
 
-        // Throttle follows the shared forward-is-positive convention (see VehicleInput). Steering
-        // maps MoveX (right positive). Brake is a held input, distinct from the edge-triggered jump.
+        // Throttle: W/S on keyboard, Right/Left triggers on gamepad (VehicleThrottle). Forward is
+        // positive (see VehicleInput). Steering maps MoveX (right positive); brake is a held input.
         var motorInput = new VehicleInput(
-            Throttle: _lastInput.MoveY,
+            Throttle: _lastInput.VehicleThrottle,
             Steer: _lastInput.MoveX,
             Brake: _lastInput.BrakeHeld);
 

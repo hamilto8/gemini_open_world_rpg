@@ -161,6 +161,11 @@ public partial class PlayerControllerNode : Node, IPlayerController, IInventoryP
         frame.MoveY = Axis(inputService, "move_forward", "move_backward");
         frame.MoveX = Axis(inputService, "move_right", "move_left");
 
+        // Vehicle throttle: W/S (also the left-stick Y via MoveY) plus the gamepad triggers
+        // (Right Trigger accelerates, Left Trigger reverses). Only the triggers add here on foot they're
+        // not in the context, so this equals MoveY unless driving.
+        frame.VehicleThrottle = Mathf.Clamp(frame.MoveY + Axis(inputService, "accelerate", "reverse"), -1f, 1f);
+
         // Right-stick camera look (analog rate; mouse-look above is a pixel delta).
         if (inputService.IsActionAllowed("look"))
         {
@@ -207,6 +212,11 @@ public partial class PlayerControllerNode : Node, IPlayerController, IInventoryP
         if (inputService.IsActionAllowed("interact"))
         {
             frame.InteractPressed = Godot.Input.IsActionJustPressed("interact");
+        }
+
+        if (inputService.IsActionAllowed("exit_vehicle"))
+        {
+            frame.ExitVehicleHeld = Godot.Input.IsActionPressed("exit_vehicle");
         }
 
         return frame;
