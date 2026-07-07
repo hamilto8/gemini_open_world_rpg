@@ -20,12 +20,15 @@ public class StatBlock
 
     public StatBlock()
     {
-        // Register default stats
+        // Register the default derived-stat catalogue. Multiplier-style stats (e.g. reload_speed)
+        // start at 1.0 so percentage modifiers (perks/gear) have a meaningful base to scale — see H3.
+        // Longer term this catalogue is data-driven (doc §8).
         SetBaseStat("max_health", 100f);
         SetBaseStat("max_stamina", 100f);
         SetBaseStat("move_speed", 5.0f);
         SetBaseStat("armor", 0f);
-        
+        SetBaseStat("reload_speed", 1.0f);
+
         SetBaseStat("health", 100f);
         SetBaseStat("stamina", 100f);
     }
@@ -34,23 +37,23 @@ public class StatBlock
     {
         ArgumentException.ThrowIfNullOrEmpty(statId);
 
-        if (!_baseValues.ContainsKey(statId))
-        {
-            return 0f;
-        }
-
         if (_dirtyStats.Contains(statId) || !_cachedValues.ContainsKey(statId))
         {
-            float baseVal = _baseValues[statId];
+            // A missing base is treated as 0 but the modifier pipeline still runs, so a modifier
+            // that targets an as-yet-unregistered stat is never silently dropped (H3).
+            float baseVal = _baseValues.TryGetValue(statId, out var registered) ? registered : 0f;
             var relevantModifiers = _modifiers.Where(m => m.TargetStatId.Equals(statId, StringComparison.OrdinalIgnoreCase));
             float finalVal = ModifierSystem.Calculate(baseVal, relevantModifiers);
-            
+
             _cachedValues[statId] = finalVal;
             _dirtyStats.Remove(statId);
         }
 
         return _cachedValues[statId];
     }
+
+    /// <summary>Returns true if a base value has been registered for the given stat id.</summary>
+    public bool HasBaseStat(string statId) => _baseValues.ContainsKey(statId);
 
     public void SetBaseStat(string statId, float value)
     {

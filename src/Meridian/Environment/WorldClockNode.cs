@@ -13,7 +13,6 @@ public partial class WorldClockNode : Node, IWorldClock, ISaveParticipant
     [Export] public double DayLengthRealMinutes { get; set; } = 40.0;
 
     private readonly WorldClock _clock = new();
-    private double _timeScale = 1.0;
 
     public double TotalGameMinutes => _clock.TotalGameMinutes;
     public int DayCounter => _clock.DayCounter;
@@ -28,6 +27,7 @@ public partial class WorldClockNode : Node, IWorldClock, ISaveParticipant
 
     public string ParticipantId => "TimeWeather";
     public int RestoreOrder => 20;
+    public Type StateType => typeof(TimeWeatherDto);
 
     public override void _EnterTree()
     {
@@ -58,9 +58,8 @@ public partial class WorldClockNode : Node, IWorldClock, ISaveParticipant
     public override void _Process(double delta)
     {
         double gameMinutesPerRealSecond = 1440.0 / (DayLengthRealMinutes * 60.0);
-        double minutesToAdvance = delta * gameMinutesPerRealSecond * _timeScale;
-
-        AdvanceTime(minutesToAdvance);
+        // Time-scale is applied inside the clock (AdvanceTime); don't pre-multiply here (L4).
+        AdvanceTime(delta * gameMinutesPerRealSecond);
     }
 
     public void SetTime(int hour, int minute)
@@ -71,7 +70,6 @@ public partial class WorldClockNode : Node, IWorldClock, ISaveParticipant
 
     public void SetTimeScale(double scale)
     {
-        _timeScale = scale;
         _clock.SetTimeScale(scale);
     }
 

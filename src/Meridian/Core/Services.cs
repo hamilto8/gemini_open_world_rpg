@@ -48,6 +48,16 @@ public static class Services
     }
 
     /// <summary>
+    /// Removes the service registered under interface type T, if any.
+    /// Nodes should call this in <c>_ExitTree</c> to keep the locator symmetric and
+    /// avoid handing out stale references after scene teardown.
+    /// </summary>
+    public static void Unregister<T>() where T : class
+    {
+        _services.Remove(typeof(T));
+    }
+
+    /// <summary>
     /// Clears all registered services. Useful for unit testing teardown and application reset.
     /// </summary>
     public static void Reset()

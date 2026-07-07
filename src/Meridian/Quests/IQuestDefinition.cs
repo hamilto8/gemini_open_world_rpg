@@ -1,7 +1,12 @@
 using System.Collections.Generic;
-using Meridian.Data;
 
 namespace Meridian.Quests;
+
+/// <summary>One quest objective as a single cohesive record (no parallel arrays to desync — M6).</summary>
+public readonly record struct QuestObjective(string ObjectiveId, ObjectiveType Type, string Target, int RequiredCount);
+
+/// <summary>One quest reward: an item id and a quantity to grant on completion.</summary>
+public readonly record struct QuestReward(string ItemId, int Count);
 
 /// <summary>
 /// Interface representing quest definitions required by the QuestManager.
@@ -12,22 +17,10 @@ public interface IQuestDefinition
     string QuestId { get; }
     string DisplayName { get; }
     string Description { get; }
-    IReadOnlyList<string> ObjectiveIds { get; }
-    IReadOnlyList<ObjectiveType> ObjectiveTypes { get; }
-    IReadOnlyList<string> ObjectiveTargets { get; }
-    IReadOnlyList<int> ObjectiveRequiredCounts { get; }
-}
 
-/// <summary>
-/// Basic mock implementation of IQuestDefinition for unit testing.
-/// </summary>
-public class BasicQuestDefinition : IQuestDefinition
-{
-    public string QuestId { get; set; } = "";
-    public string DisplayName { get; set; } = "";
-    public string Description { get; set; } = "";
-    public IReadOnlyList<string> ObjectiveIds { get; set; } = new List<string>();
-    public IReadOnlyList<ObjectiveType> ObjectiveTypes { get; set; } = new List<ObjectiveType>();
-    public IReadOnlyList<string> ObjectiveTargets { get; set; } = new List<string>();
-    public IReadOnlyList<int> ObjectiveRequiredCounts { get; set; } = new List<int>();
+    /// <summary>Objectives modeled as cohesive records rather than parallel arrays.</summary>
+    IReadOnlyList<QuestObjective> Objectives { get; }
+
+    /// <summary>Items granted when every objective is complete.</summary>
+    IReadOnlyList<QuestReward> Rewards { get; }
 }

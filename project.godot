@@ -19,7 +19,6 @@ config/icon="res://icon.svg"
 [autoload]
 
 EventBus="*res://src/Meridian/Core/EventBusNode.cs"
-ServicesNode="*res://src/Meridian/Core/ServicesNode.cs"
 GameDirector="*res://src/Meridian/Core/GameDirectorNode.cs"
 SaveService="*res://src/Meridian/Core/Save/SaveServiceNode.cs"
 InputContextService="*res://src/Meridian/Input/InputContextServiceNode.cs"

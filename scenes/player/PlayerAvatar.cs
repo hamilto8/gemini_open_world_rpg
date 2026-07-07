@@ -33,8 +33,32 @@ public partial class PlayerAvatar : CharacterBody3D, IPossessable
         var root = GetTree().CurrentScene;
         _hud = root.GetNodeOrNull<MinimalHud>("UILayer/MinimalHud");
 
+        // Drive HUD health/stamina from StatBlock changes rather than polling every physics frame (L11).
+        if (_stats != null)
+        {
+            _stats.StatChanged += OnStatChanged;
+            RefreshHudStats();
+        }
+
         // Auto possess avatar at boot if controller is ready (GDD possession workflow)
         CallDeferred(nameof(AutoPossess));
+    }
+
+    private void OnStatChanged(string statId, float newValue)
+    {
+        // Only the vitals shown on the HUD warrant a refresh.
+        if (statId is "health" or "max_health" or "stamina" or "max_stamina")
+        {
+            RefreshHudStats();
+        }
+    }
+
+    private void RefreshHudStats()
+    {
+        if (_hud == null || _stats == null) return;
+        _hud.UpdatePlayerStats(
+            _stats.GetStat("health"), _stats.GetStat("max_health"),
+            _stats.GetStat("stamina"), _stats.GetStat("max_stamina"));
     }
 
     private void AutoPossess()
@@ -45,7 +69,7 @@ public partial class PlayerAvatar : CharacterBody3D, IPossessable
         }
     }
 
-    public void OnPossessed(PlayerControllerNode controller)
+    public void OnPossessed(IPlayerController controller)
     {
         GD.Print("[PlayerAvatar] Possessed by controller.");
     }
@@ -66,9 +90,6 @@ public partial class PlayerAvatar : CharacterBody3D, IPossessable
         if (_motor == null || _stats == null) return;
 
         float stamina = _stats.GetStat("stamina");
-        float maxStamina = _stats.GetStat("max_stamina");
-        float health = _stats.GetStat("health");
-        float maxHealth = _stats.GetStat("max_health");
 
         // 1. Update Locomotion HSM
         _hsm.Update(
@@ -82,11 +103,11 @@ public partial class PlayerAvatar : CharacterBody3D, IPossessable
         // 2. Perform Movement Motor integration
         _motor.Move(_lastInput, _hsm.CurrentState, _hsm.Aiming, delta);
 
-        // 3. Update Camera positioning and smoothing
-        _cameraRig?.UpdateCamera(_hsm.Aiming, delta);
+        // 3. Update Camera positioning and smoothing (look comes from the input frame)
+        _cameraRig?.UpdateCamera(_lastInput, _hsm.Aiming, delta);
 
-        // 4. Update HUD elements (event-free or basic updates)
-        _hud?.UpdatePlayerStats(health, maxHealth, stamina, maxStamina);
+        // 4. HUD stats are driven by StatBlockNode.StatChanged (see _Ready); only the aim reticle,
+        //    which mirrors transient HSM state, is pushed here.
         _hud?.SetAiming(_hsm.Aiming);
 
         // 5. Execute interaction input

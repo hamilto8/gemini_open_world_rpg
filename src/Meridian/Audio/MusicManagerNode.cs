@@ -9,7 +9,7 @@ namespace Meridian.Audio;
 /// Delegates calculations to the pure C# MusicManager.
 /// Enforces Section 19.1 requirements.
 /// </summary>
-public partial class MusicManagerNode : Node
+public partial class MusicManagerNode : Node, IMusicManager
 {
     private readonly MusicManager _manager = new();
 
@@ -19,17 +19,26 @@ public partial class MusicManagerNode : Node
 
     public override void _EnterTree()
     {
-        Services.Register<MusicManagerNode>(this);
+        Services.Register<IMusicManager>(this);
+    }
+
+    public override void _ExitTree()
+    {
+        if (Services.TryGet<IMusicManager>(out var current) && ReferenceEquals(current, this))
+        {
+            Services.Unregister<IMusicManager>();
+        }
     }
 
     public void SetTension(float targetTension)
     {
         _manager.SetTension(targetTension);
-        
-        // Under Godot, we would update AudioServer bus volume:
+
+        // TODO(audio): stub — the crossfade volumes are computed but not yet applied to real buses.
+        // Wire up once the ExplorationBus/CombatBus audio buses exist (L9):
         // AudioServer.SetBusVolumeDb(AudioServer.GetBusIndex("ExplorationBus"), ExplorationVolumeDb);
         // AudioServer.SetBusVolumeDb(AudioServer.GetBusIndex("CombatBus"), CombatVolumeDb);
-        
+
         GD.Print($"[MusicManager] Tension updated to {Tension:P0}. Exploration: {ExplorationVolumeDb:F1}dB, Combat: {CombatVolumeDb:F1}dB");
     }
 }

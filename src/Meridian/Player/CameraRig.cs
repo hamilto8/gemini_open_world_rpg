@@ -1,12 +1,13 @@
 using Godot;
-using System;
+using Meridian.Core;
 using Meridian.Data;
 
 namespace Meridian.Player;
 
 /// <summary>
 /// SpringArm3D-based camera rig handling smooth transitions between explore and aim states.
-/// Enforces Section 5.4 requirements.
+/// Look input arrives via the <see cref="InputFrame"/> (already context-gated by the controller),
+/// so the rig never polls raw input or owns the mouse mode. Enforces Section 5.4 requirements.
 /// </summary>
 public partial class CameraRig : SpringArm3D
 {
@@ -39,31 +40,22 @@ public partial class CameraRig : SpringArm3D
         _currentSpringLength = ExploreMode.SpringLength;
         _currentFov = ExploreMode.Fov;
         _currentShoulderOffset = ExploreMode.ShoulderOffset;
-
-        // Hide cursor
-        Godot.Input.MouseMode = Godot.Input.MouseModeEnum.Captured;
     }
 
-    public override void _UnhandledInput(InputEvent @event)
-    {
-        if (@event is InputEventMouseMotion mouseMotion && Godot.Input.MouseMode == Godot.Input.MouseModeEnum.Captured)
-        {
-            // Adjust camera look rotation based on mouse sensitivity
-            _yaw -= mouseMotion.Relative.X * 0.003f;
-            _pitch = Mathf.Clamp(_pitch - mouseMotion.Relative.Y * 0.003f, -Mathf.Pi / 3.0f, Mathf.Pi / 4.0f);
-        }
-    }
-
-    public void UpdateCamera(bool isAiming, double delta)
+    public void UpdateCamera(InputFrame input, bool isAiming, double delta)
     {
         if (_target == null || _camera == null) return;
 
-        // Rotate camera rig
-        Rotation = new Vector3(_pitch, _yaw, 0);
-
         // Interpolate camera modes parameters (Explore ↔ Aim)
-        var targetMode = isAiming ? AimMode : ExploreMode;
+        var targetMode = (isAiming ? AimMode : ExploreMode) ?? ExploreMode;
         if (targetMode == null) return;
+
+        // Apply look from the (context-gated) input frame, scaled by the mode's data-driven sensitivity.
+        float sensitivity = targetMode.MouseSensitivity;
+        _yaw -= input.LookX * sensitivity;
+        _pitch = Mathf.Clamp(_pitch - input.LookY * sensitivity, -Mathf.Pi / 3.0f, Mathf.Pi / 4.0f);
+
+        Rotation = new Vector3(_pitch, _yaw, 0);
 
         float weight = (float)(targetMode.SmoothSpeed * delta);
         _currentSpringLength = Mathf.Lerp(_currentSpringLength, targetMode.SpringLength, weight);
@@ -77,9 +69,9 @@ public partial class CameraRig : SpringArm3D
         Position = targetMode.PivotOffset;
         _camera.Position = new Vector3(_currentShoulderOffset, 0, 0);
 
-        // Update target rotation to follow yaw if moving, or during aim
-        if (isAiming || Godot.Input.IsActionPressed("move_forward") || Godot.Input.IsActionPressed("move_backward") ||
-            Godot.Input.IsActionPressed("move_left") || Godot.Input.IsActionPressed("move_right"))
+        // Turn the body to face the camera yaw when aiming or moving (movement read from the frame).
+        bool moving = Mathf.Abs(input.MoveX) > 0.01f || Mathf.Abs(input.MoveY) > 0.01f;
+        if (isAiming || moving)
         {
             _target.Rotation = new Vector3(_target.Rotation.X, _yaw, _target.Rotation.Z);
         }

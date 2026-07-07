@@ -3,8 +3,10 @@ using System;
 namespace Meridian.Core;
 
 /// <summary>
-/// Immutable input frame containing snapshot of player inputs for a single frame.
-/// Decouples physical input devices from possessed entities.
+/// Per-frame snapshot of player inputs, compiled once per physics tick by the
+/// <see cref="PlayerControllerNode"/> and handed to the possessed entity. Decouples physical
+/// input devices from possessed entities. Fields are write-once during compilation and read-only
+/// thereafter; <c>LookX</c>/<c>LookY</c> carry the camera look delta.
 /// </summary>
 public struct InputFrame
 {
@@ -18,6 +20,9 @@ public struct InputFrame
     public bool AimHeld;
     public bool FirePressed;
     public bool InteractPressed;
+
+    /// <summary>Held brake input (vehicles). Distinct from <c>JumpPressed</c>, which is edge-triggered.</summary>
+    public bool BrakeHeld;
 }
 
 /// <summary>
@@ -26,9 +31,10 @@ public struct InputFrame
 public interface IPossessable
 {
     /// <summary>
-    /// Called when the PlayerController possesses this entity.
+    /// Called when the PlayerController possesses this entity. Depends on the
+    /// <see cref="IPlayerController"/> abstraction so possessables stay headless-testable (Section 3.5).
     /// </summary>
-    void OnPossessed(PlayerControllerNode controller);
+    void OnPossessed(IPlayerController controller);
 
     /// <summary>
     /// Called when the PlayerController releases this entity.

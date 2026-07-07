@@ -2,25 +2,36 @@ using Godot;
 using System;
 using Meridian.Core.Save;
 using Meridian.Input;
+using Meridian.Items;
+using Meridian.World;
 
 namespace Meridian.Core;
 
 /// <summary>
 /// Persistent Node representing the player's brain.
-/// Processes input, maintains possession, and tracks character stats/identity.
+/// Processes input, maintains possession, and tracks character stats/identity (StatBlock, inventory,
+/// progression — doc §5.1).
 /// </summary>
-public partial class PlayerControllerNode : Node, IPlayerController, ISaveParticipant
+public partial class PlayerControllerNode : Node, IPlayerController, IInventoryProvider, ISaveParticipant
 {
     private IPossessable? _possessedEntity;
+    private readonly InventoryModel _inventory = new();
+    private Vector2 _pendingLook;
+    private bool _mouseCaptured;
 
     public IPossessable? PossessedEntity => _possessedEntity;
 
+    public InventoryModel Inventory => _inventory;
+    public WeaponInstance? EquippedWeapon { get; set; }
+
     public string ParticipantId => "PlayerState";
     public int RestoreOrder => 100; // Restores last after streaming and world environments are ready
+    public Type StateType => typeof(PlayerStateDto);
 
     public override void _EnterTree()
     {
         Services.Register<IPlayerController>(this);
+        Services.Register<IInventoryProvider>(this);
     }
 
     public override void _Ready()
@@ -37,10 +48,35 @@ public partial class PlayerControllerNode : Node, IPlayerController, ISavePartic
         {
             saveService.UnregisterParticipant(this);
         }
+
+        // Symmetric unregistration so a torn-down controller can't hand out a stale reference (L2).
+        if (Services.TryGet<IPlayerController>(out var pc) && ReferenceEquals(pc, this))
+        {
+            Services.Unregister<IPlayerController>();
+        }
+        if (Services.TryGet<IInventoryProvider>(out var provider) && ReferenceEquals(provider, this))
+        {
+            Services.Unregister<IInventoryProvider>();
+        }
+    }
+
+    public override void _UnhandledInput(InputEvent @event)
+    {
+        // The controller owns input reading, so mouse-look is gated by the active input context here
+        // rather than polled raw inside the camera (M11). Accumulated delta is drained each frame.
+        if (@event is InputEventMouseMotion motion
+            && Services.TryGet<IInputContextService>(out var inputService)
+            && inputService != null
+            && inputService.IsActionAllowed("look"))
+        {
+            _pendingLook += motion.Relative;
+        }
     }
 
     public override void _PhysicsProcess(double delta)
     {
+        UpdateMouseCapture();
+
         if (_possessedEntity == null) return;
 
         // Compile input snapshot
@@ -48,6 +84,29 @@ public partial class PlayerControllerNode : Node, IPlayerController, ISavePartic
 
         // Feed input to possessed entity
         _possessedEntity.ReceiveFrameInput(inputFrame);
+    }
+
+    /// <summary>
+    /// The input layer owns <see cref="Godot.Input.MouseMode"/>: cursor is captured only while a
+    /// gameplay context allows looking, so menus/dialogue free the cursor without fighting the camera (M11).
+    /// </summary>
+    private void UpdateMouseCapture()
+    {
+        if (!Services.TryGet<IInputContextService>(out var inputService) || inputService == null)
+        {
+            return;
+        }
+
+        bool shouldCapture = inputService.IsActionAllowed("look");
+        if (shouldCapture == _mouseCaptured)
+        {
+            return;
+        }
+
+        _mouseCaptured = shouldCapture;
+        Godot.Input.MouseMode = shouldCapture
+            ? Godot.Input.MouseModeEnum.Captured
+            : Godot.Input.MouseModeEnum.Visible;
     }
 
     public void Possess(IPossessable entity)
@@ -79,6 +138,11 @@ public partial class PlayerControllerNode : Node, IPlayerController, ISavePartic
     {
         var inputService = Services.Get<IInputContextService>();
         var frame = new InputFrame();
+
+        // Drain accumulated mouse-look into the frame so the camera reads it from InputFrame, not raw input.
+        frame.LookX = _pendingLook.X;
+        frame.LookY = _pendingLook.Y;
+        _pendingLook = Vector2.Zero;
 
         // Standard actions allowed checks via input context mapping (Section 17.1)
         if (inputService.IsActionAllowed("move_forward") && Godot.Input.IsActionPressed("move_forward")) frame.MoveY += 1.0f;
@@ -112,6 +176,11 @@ public partial class PlayerControllerNode : Node, IPlayerController, ISavePartic
             frame.CrouchHeld = Godot.Input.IsActionPressed("crouch");
         }
 
+        if (inputService.IsActionAllowed("brake"))
+        {
+            frame.BrakeHeld = Godot.Input.IsActionPressed("brake");
+        }
+
         if (inputService.IsActionAllowed("interact"))
         {
             frame.InteractPressed = Godot.Input.IsActionJustPressed("interact");
@@ -122,8 +191,6 @@ public partial class PlayerControllerNode : Node, IPlayerController, ISavePartic
 
     public object CaptureState()
     {
-        // Persist position and region.
-        // For Phase 1, we pull position directly from the possessed entity if it supports 3D spatial properties, or default it.
         float posX = 0f, posY = 0f, posZ = 0f;
         float rotY = 0f;
 
@@ -136,27 +203,53 @@ public partial class PlayerControllerNode : Node, IPlayerController, ISavePartic
             rotY = spatialNode.GlobalRotation.Y;
         }
 
+        // Pull live health/stamina from the possessed avatar's StatBlock, and the region from the streamer.
+        var stats = GetPossessedStatBlock();
+        float health = stats?.GetStat("health") ?? 100f;
+        float stamina = stats?.GetStat("stamina") ?? 100f;
+
+        string regionId = "unknown";
+        if (Services.TryGet<IWorldStreamer>(out var streamer) && streamer?.CurrentRegionId is string id)
+        {
+            regionId = id;
+        }
+
         return new PlayerStateDto(
-            CurrentRegionId: "harbor_town",
+            CurrentRegionId: regionId,
             PositionX: posX,
             PositionY: posY,
             PositionZ: posZ,
             RotationY: rotY,
-            Health: 100f, // StatBlock value will override this
-            Stamina: 100f,
-            PossessedGuid: _possessedEntity != null ? "avatar_player" : ""
+            Health: health,
+            Stamina: stamina,
+            PossessedGuid: _possessedEntity is Node node ? node.Name : ""
         );
     }
 
     public void RestoreState(object stateDto)
     {
-        if (stateDto is PlayerStateDto dto)
+        if (stateDto is not PlayerStateDto dto)
         {
-            if (_possessedEntity is Node3D spatialNode)
-            {
-                spatialNode.GlobalPosition = new Vector3(dto.PositionX, dto.PositionY, dto.PositionZ);
-                spatialNode.GlobalRotation = new Vector3(spatialNode.GlobalRotation.X, dto.RotationY, spatialNode.GlobalRotation.Z);
-            }
+            return;
         }
+
+        if (_possessedEntity is Node3D spatialNode)
+        {
+            spatialNode.GlobalPosition = new Vector3(dto.PositionX, dto.PositionY, dto.PositionZ);
+            spatialNode.GlobalRotation = new Vector3(spatialNode.GlobalRotation.X, dto.RotationY, spatialNode.GlobalRotation.Z);
+        }
+
+        // Restore health/stamina symmetrically onto the avatar's StatBlock.
+        var stats = GetPossessedStatBlock();
+        if (stats != null)
+        {
+            stats.SetBaseStat("health", dto.Health);
+            stats.SetBaseStat("stamina", dto.Stamina);
+        }
+    }
+
+    private StatBlockNode? GetPossessedStatBlock()
+    {
+        return _possessedEntity is Node node ? node.GetNodeOrNull<StatBlockNode>("StatBlock") : null;
     }
 }

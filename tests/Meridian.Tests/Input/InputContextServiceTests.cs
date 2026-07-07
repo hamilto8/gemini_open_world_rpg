@@ -46,18 +46,19 @@ public class InputContextServiceTests
         // OnFoot allows jump and move
         Assert.True(service.IsActionAllowed("jump"));
         Assert.True(service.IsActionAllowed("move_forward"));
-        Assert.False(service.IsActionAllowed("vehicle_throttle"));
+        Assert.False(service.IsActionAllowed("brake"));
 
-        // Push Vehicle context
+        // Push Vehicle context: movement actions drive throttle/steer, brake is held, jump is blocked.
         service.PushContext(InputContextType.Vehicle);
-        Assert.True(service.IsActionAllowed("vehicle_throttle"));
+        Assert.True(service.IsActionAllowed("move_forward")); // drives throttle (C3)
+        Assert.True(service.IsActionAllowed("brake"));
         Assert.False(service.IsActionAllowed("jump"));
-        Assert.True(service.IsActionAllowed("interact")); // allowed in both
+        Assert.True(service.IsActionAllowed("interact")); // allowed in both (exit)
 
         // Push UI context
         service.PushContext(InputContextType.UI);
         Assert.True(service.IsActionAllowed("ui_accept"));
-        Assert.False(service.IsActionAllowed("vehicle_throttle"));
+        Assert.False(service.IsActionAllowed("move_forward"));
         Assert.False(service.IsActionAllowed("jump"));
 
         // Global actions always allowed

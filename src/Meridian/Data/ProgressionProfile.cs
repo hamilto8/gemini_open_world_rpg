@@ -13,4 +13,5 @@ public partial class ProgressionProfile : Resource, IProgressionProfile
     [Export] public int BaseXpRequired { get; set; } = 100;
     [Export] public float XpExponent { get; set; } = 1.5f;
     [Export] public int MaxLevel { get; set; } = 50;
+    [Export] public int SkillPointsPerLevel { get; set; } = 2;
 }

@@ -6,7 +6,12 @@
     <IsPackable>false</IsPackable>
     <IsTestProject>true</IsTestProject>
     <RootNamespace>Meridian.Tests</RootNamespace>
-    <NoWarn>CS8785</NoWarn>
+    <!--
+      The test project references the Godot game assembly, which transitively pulls in Godot's
+      ScriptPathAttributeGenerator. That generator needs GodotProjectDir; point it at the game
+      project so it runs cleanly instead of throwing CS8785 (which we previously masked with NoWarn).
+    -->
+    <GodotProjectDir>$(MSBuildProjectDirectory)/../../</GodotProjectDir>
   </PropertyGroup>
 
   <ItemGroup>
@@ -20,5 +25,10 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\Meridian.csproj" />
+  </ItemGroup>
+
+  <!-- Expose GodotProjectDir to the transitively-referenced Godot source generators. -->
+  <ItemGroup>
+    <CompilerVisibleProperty Include="GodotProjectDir" />
   </ItemGroup>
 </Project>

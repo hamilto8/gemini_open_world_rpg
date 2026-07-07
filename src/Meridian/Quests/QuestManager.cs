@@ -2,7 +2,8 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using Meridian.Core;
-using Meridian.Data;
+using Meridian.Core.Save;
+using Meridian.Items;
 
 namespace Meridian.Quests;
 
@@ -16,10 +17,10 @@ public enum QuestState
 
 /// <summary>
 /// Domain model for Quest tracking and objective progress evaluation.
-/// Decoupled from Godot for headless unit testing.
+/// Decoupled from Godot for headless unit testing. Participates in save/restore.
 /// Enforces Section 14.1 and 14.3 requirements.
 /// </summary>
-public class QuestManager
+public class QuestManager : ISaveParticipant
 {
     private readonly Dictionary<string, QuestState> _questStates = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, Dictionary<string, int>> _objectiveProgress = new(StringComparer.OrdinalIgnoreCase);
@@ -29,6 +30,10 @@ public class QuestManager
     public event Action<string, string, int>? ObjectiveProgressChanged;
 
     public IReadOnlyDictionary<string, QuestState> QuestStates => _questStates;
+
+    public string ParticipantId => "Quests";
+    public int RestoreOrder => 50;
+    public Type StateType => typeof(QuestSaveDto);
 
     public void RegisterQuest(IQuestDefinition definition)
     {
@@ -58,13 +63,13 @@ public class QuestManager
         _questStates[questId] = QuestState.Active;
         _objectiveProgress[questId] = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
 
-        foreach (var objId in def.ObjectiveIds)
+        foreach (var objective in def.Objectives)
         {
-            _objectiveProgress[questId][objId] = 0;
+            _objectiveProgress[questId][objective.ObjectiveId] = 0;
         }
 
         QuestStateChanged?.Invoke(questId, QuestState.Active);
-        
+
         if (Services.TryGet<IEventBus>(out var eventBus) && eventBus != null)
         {
             eventBus.Publish(new QuestStateChangedEvent(questId, QuestState.Active));
@@ -75,31 +80,32 @@ public class QuestManager
 
     public void IncrementObjective(string targetName, ObjectiveType type, int amount = 1)
     {
-        foreach (var questEntry in _questStates.Where(q => q.Value == QuestState.Active))
+        // Snapshot active quest ids: completing a quest mutates _questStates, so iterating the live
+        // collection would be a mutation-during-enumeration hazard (M5).
+        var activeQuestIds = _questStates
+            .Where(q => q.Value == QuestState.Active)
+            .Select(q => q.Key)
+            .ToList();
+
+        foreach (var questId in activeQuestIds)
         {
-            string questId = questEntry.Key;
-            var def = _definitions[questId];
+            if (!_definitions.TryGetValue(questId, out var def)) continue;
 
-            for (int i = 0; i < def.ObjectiveIds.Count; i++)
+            foreach (var objective in def.Objectives)
             {
-                string objId = def.ObjectiveIds[i];
-                ObjectiveType objType = def.ObjectiveTypes[i];
-                string objTarget = def.ObjectiveTargets[i];
-                int required = def.ObjectiveRequiredCounts[i];
-
-                if (objType == type && objTarget.Equals(targetName, StringComparison.OrdinalIgnoreCase))
+                if (objective.Type != type || !objective.Target.Equals(targetName, StringComparison.OrdinalIgnoreCase))
                 {
-                    int current = GetObjectiveProgress(questId, objId);
-                    if (current < required)
-                    {
-                        int next = Math.Min(required, current + amount);
-                        _objectiveProgress[questId][objId] = next;
+                    continue;
+                }
 
-                        ObjectiveProgressChanged?.Invoke(questId, objId, next);
+                int current = GetObjectiveProgress(questId, objective.ObjectiveId);
+                if (current < objective.RequiredCount)
+                {
+                    int next = Math.Min(objective.RequiredCount, current + amount);
+                    _objectiveProgress[questId][objective.ObjectiveId] = next;
 
-                        // Check if all objectives are complete
-                        CheckQuestCompletion(questId);
-                    }
+                    ObjectiveProgressChanged?.Invoke(questId, objective.ObjectiveId, next);
+                    CheckQuestCompletion(questId);
                 }
             }
         }
@@ -108,30 +114,67 @@ public class QuestManager
     private void CheckQuestCompletion(string questId)
     {
         if (!_definitions.TryGetValue(questId, out var def)) return;
-        
-        bool allComplete = true;
-        for (int i = 0; i < def.ObjectiveIds.Count; i++)
-        {
-            string objId = def.ObjectiveIds[i];
-            int required = def.ObjectiveRequiredCounts[i];
-            int current = GetObjectiveProgress(questId, objId);
 
-            if (current < required)
+        foreach (var objective in def.Objectives)
+        {
+            if (GetObjectiveProgress(questId, objective.ObjectiveId) < objective.RequiredCount)
             {
-                allComplete = false;
-                break;
+                return; // not all objectives complete
             }
         }
 
-        if (allComplete)
-        {
-            _questStates[questId] = QuestState.Completed;
-            QuestStateChanged?.Invoke(questId, QuestState.Completed);
+        _questStates[questId] = QuestState.Completed;
+        GrantRewards(def);
 
-            if (Services.TryGet<IEventBus>(out var eventBus) && eventBus != null)
+        QuestStateChanged?.Invoke(questId, QuestState.Completed);
+
+        if (Services.TryGet<IEventBus>(out var eventBus) && eventBus != null)
+        {
+            eventBus.Publish(new QuestStateChangedEvent(questId, QuestState.Completed));
+        }
+    }
+
+    private static void GrantRewards(IQuestDefinition def)
+    {
+        if (def.Rewards.Count == 0) return;
+        if (!Services.TryGet<IInventoryProvider>(out var provider) || provider == null) return;
+
+        foreach (var reward in def.Rewards)
+        {
+            if (!string.IsNullOrEmpty(reward.ItemId) && reward.Count > 0)
             {
-                eventBus.Publish(new QuestStateChangedEvent(questId, QuestState.Completed));
+                provider.Inventory.AddItem(new ItemInstance(reward.ItemId, reward.Count));
             }
+        }
+    }
+
+    public object CaptureState()
+    {
+        var states = _questStates.ToDictionary(kv => kv.Key, kv => kv.Value.ToString(), StringComparer.OrdinalIgnoreCase);
+        var progress = _objectiveProgress.ToDictionary(
+            kv => kv.Key,
+            kv => new Dictionary<string, int>(kv.Value, StringComparer.OrdinalIgnoreCase),
+            StringComparer.OrdinalIgnoreCase);
+        return new QuestSaveDto(states, progress);
+    }
+
+    public void RestoreState(object stateDto)
+    {
+        if (stateDto is not QuestSaveDto dto) return;
+
+        _questStates.Clear();
+        foreach (var kv in dto.QuestStates)
+        {
+            if (Enum.TryParse<QuestState>(kv.Value, out var state))
+            {
+                _questStates[kv.Key] = state;
+            }
+        }
+
+        _objectiveProgress.Clear();
+        foreach (var kv in dto.ObjectiveProgress)
+        {
+            _objectiveProgress[kv.Key] = new Dictionary<string, int>(kv.Value, StringComparer.OrdinalIgnoreCase);
         }
     }
 }

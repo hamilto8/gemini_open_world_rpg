@@ -18,6 +18,7 @@ public partial class NpcLifeController : Node3D
 
     private readonly NpcScheduler _scheduler = new();
     private NpcActivityState _currentState = NpcActivityState.Sleeping;
+    private IDisposable? _hourSubscription;
 
     public NpcActivityState CurrentState => _currentState;
 
@@ -28,8 +29,16 @@ public partial class NpcLifeController : Node3D
 
         if (Services.TryGet<IEventBus>(out var eventBus) && eventBus != null)
         {
-            eventBus.Subscribe<HourChangedEvent>(OnHourChanged);
+            // Store the token and dispose it in _ExitTree — this node is streamed in/out, so a
+            // discarded token would leave a dangling handler on a freed Node (Section 3.3, non-negotiable).
+            _hourSubscription = eventBus.Subscribe<HourChangedEvent>(OnHourChanged);
         }
+    }
+
+    public override void _ExitTree()
+    {
+        _hourSubscription?.Dispose();
+        _hourSubscription = null;
     }
 
     public void OnHourChanged(HourChangedEvent ev)

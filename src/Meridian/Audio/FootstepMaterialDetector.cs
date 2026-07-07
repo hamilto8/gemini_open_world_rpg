@@ -47,6 +47,9 @@ public partial class FootstepMaterialDetectorNode : RayCast3D
         }
     }
 
+    // TODO(audio): stub — not yet called by the locomotion system, and material detection hardcodes
+    // the "metal"/"dirt" group names. Wire this to the animation/step events and play through the
+    // AudioDirector once footstep cues are authored (L9).
     public void PlayFootstep()
     {
         if (!IsColliding()) return;

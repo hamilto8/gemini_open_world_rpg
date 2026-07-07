@@ -1,7 +1,5 @@
 using System;
 using System.Collections.Generic;
-using Meridian.Core;
-using Meridian.Data;
 
 namespace Meridian.Core;
 
@@ -37,7 +35,7 @@ public class ProgressionManager
         return (int)(_profile.BaseXpRequired * Math.Pow(_level, _profile.XpExponent));
     }
 
-    public void AddXp(int amount, StatBlock stats)
+    public void AddXp(int amount)
     {
         if (amount <= 0 || _level >= _profile.MaxLevel) return;
 
@@ -49,7 +47,7 @@ public class ProgressionManager
         {
             _currentXp -= GetXpForNextLevel();
             _level++;
-            _skillPoints += 2; // Grants 2 skill points per level
+            _skillPoints += _profile.SkillPointsPerLevel;
 
             LevelChanged?.Invoke(_level);
 
@@ -83,10 +81,10 @@ public class ProgressionManager
     {
         if (perkId.Equals("fast_reload", StringComparison.OrdinalIgnoreCase))
         {
-            // +15% reload speed (translates to faster actions)
+            // +15% reload speed. reload_speed has base 1.0, so PercentAdd 0.15 => 1.15 (H8 fraction convention).
             stats.AddModifier(new Modifier(
                 targetStatId: "reload_speed",
-                operation: ModifierOp.Add,
+                operation: ModifierOp.PercentAdd,
                 value: 0.15f,
                 sourceTag: $"perk_{perkId}"
             ));

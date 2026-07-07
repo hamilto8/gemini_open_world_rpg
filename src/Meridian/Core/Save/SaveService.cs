@@ -16,12 +16,14 @@ public class SaveService : ISaveService
     private readonly string _baseDir;
     private readonly string _gameVersion;
     private readonly int _saveVersion;
+    private readonly Action<string>? _logger;
 
-    public SaveService(string baseDir, string gameVersion = "1.0.0", int saveVersion = 1)
+    public SaveService(string baseDir, string gameVersion = "1.0.0", int saveVersion = 1, Action<string>? logger = null)
     {
         _baseDir = baseDir;
         _gameVersion = gameVersion;
         _saveVersion = saveVersion;
+        _logger = logger;
 
         if (!Directory.Exists(_baseDir))
         {
@@ -68,7 +70,7 @@ public class SaveService : ISaveService
         foreach (var participant in _participants)
         {
             var stateObj = participant.CaptureState();
-            string json = SerializeState(stateObj);
+            string json = SerializeState(participant, stateObj);
             states[participant.ParticipantId] = json;
         }
 
@@ -123,50 +125,91 @@ public class SaveService : ISaveService
 
     public bool LoadGame(string slotName)
     {
-        string filePath = GetSavePath(slotName);
-        if (!File.Exists(filePath))
+        string primaryPath = GetSavePath(slotName);
+        string bakPath = primaryPath + ".bak";
+
+        // Try the primary file first; on missing OR corrupt primary, fall back to the backup (H5).
+        if (TryLoadFrom(primaryPath, out bool primaryExisted))
         {
-            // Fall back to backup if original is missing/corrupt
-            filePath = filePath + ".bak";
-            if (!File.Exists(filePath))
-            {
-                return false;
-            }
+            return true;
+        }
+        if (primaryExisted)
+        {
+            _logger?.Invoke($"[SaveService] Primary save '{slotName}' unreadable; attempting backup.");
+        }
+        return TryLoadFrom(bakPath, out _);
+    }
+
+    private bool TryLoadFrom(string filePath, out bool existed)
+    {
+        existed = File.Exists(filePath);
+        if (!existed)
+        {
+            return false;
         }
 
+        GameSaveData? saveData;
         try
         {
             string jsonContent = File.ReadAllText(filePath);
-            var saveData = JsonSerializer.Deserialize(jsonContent, SaveJsonContext.Default.GameSaveData);
-            if (saveData == null)
+            saveData = JsonSerializer.Deserialize(jsonContent, SaveJsonContext.Default.GameSaveData);
+        }
+        catch (Exception ex)
+        {
+            _logger?.Invoke($"[SaveService] Failed to parse save '{filePath}': {ex.Message}");
+            return false;
+        }
+
+        if (saveData == null)
+        {
+            _logger?.Invoke($"[SaveService] Save '{filePath}' deserialized to null.");
+            return false;
+        }
+
+        RestoreParticipants(saveData);
+        return true;
+    }
+
+    private void RestoreParticipants(GameSaveData saveData)
+    {
+        var sortedParticipants = _participants
+            .OrderBy(p => p.RestoreOrder)
+            .ToList();
+
+        var matchedIds = new HashSet<string>(StringComparer.Ordinal);
+
+        foreach (var participant in sortedParticipants)
+        {
+            if (!saveData.ParticipantStatesJson.TryGetValue(participant.ParticipantId, out var stateJson))
             {
-                return false;
+                continue;
             }
 
-            // 1. Sort participants by RestoreOrder
-            var sortedParticipants = _participants
-                .OrderBy(p => p.RestoreOrder)
-                .ToList();
+            matchedIds.Add(participant.ParticipantId);
 
-            // 2. Restore state for each participant
-            foreach (var participant in sortedParticipants)
+            // Restore per participant so one bad participant is logged, not silently swallowed,
+            // and does not abort the whole restore mid-way (H5).
+            try
             {
-                if (saveData.ParticipantStatesJson.TryGetValue(participant.ParticipantId, out var stateJson))
+                object? stateDto = DeserializeState(participant, stateJson);
+                if (stateDto != null)
                 {
-                    object? stateDto = DeserializeState(participant.ParticipantId, stateJson);
-                    if (stateDto != null)
-                    {
-                        participant.RestoreState(stateDto);
-                    }
+                    participant.RestoreState(stateDto);
                 }
             }
-
-            return true;
+            catch (Exception ex)
+            {
+                _logger?.Invoke($"[SaveService] Participant '{participant.ParticipantId}' failed to restore: {ex.Message}");
+            }
         }
-        catch (Exception)
+
+        // Surface (don't swallow) saved state that no registered participant claims (H4).
+        foreach (var savedId in saveData.ParticipantStatesJson.Keys)
         {
-            // Return false on deserialization failure or restore exception
-            return false;
+            if (!matchedIds.Contains(savedId))
+            {
+                _logger?.Invoke($"[SaveService] Save contains state for unregistered participant '{savedId}'; skipped.");
+            }
         }
     }
 
@@ -175,24 +218,15 @@ public class SaveService : ISaveService
         return Path.Combine(_baseDir, $"{slotName}.json");
     }
 
-    private string SerializeState(object obj)
+    private static string SerializeState(ISaveParticipant participant, object obj)
     {
-        // Use type-matching to invoke the correct context serialization
-        if (obj is PlayerStateDto player) return JsonSerializer.Serialize(player, SaveJsonContext.Default.PlayerStateDto);
-        if (obj is WorldFlagsDto flags) return JsonSerializer.Serialize(flags, SaveJsonContext.Default.WorldFlagsDto);
-        if (obj is TimeWeatherDto tw) return JsonSerializer.Serialize(tw, SaveJsonContext.Default.TimeWeatherDto);
-
-        // Fallback for custom objects / generic fallback using basic serialization (not fully trimming-safe but necessary for test extensions)
-        return JsonSerializer.Serialize(obj, obj.GetType());
+        // Serialize by the participant's declared DTO type through the source-generated context
+        // (no id-substring guessing, no reflection fallback). Throws loudly if the type is unregistered.
+        return JsonSerializer.Serialize(obj, participant.StateType, SaveJsonContext.Default);
     }
 
-    private object? DeserializeState(string id, string json)
+    private static object? DeserializeState(ISaveParticipant participant, string json)
     {
-        // Find expected type based on id convention
-        if (id.Contains("Player", StringComparison.OrdinalIgnoreCase)) return JsonSerializer.Deserialize(json, SaveJsonContext.Default.PlayerStateDto);
-        if (id.Contains("Flag", StringComparison.OrdinalIgnoreCase)) return JsonSerializer.Deserialize(json, SaveJsonContext.Default.WorldFlagsDto);
-        if (id.Contains("Time", StringComparison.OrdinalIgnoreCase) || id.Contains("Weather", StringComparison.OrdinalIgnoreCase)) return JsonSerializer.Deserialize(json, SaveJsonContext.Default.TimeWeatherDto);
-
-        return null;
+        return JsonSerializer.Deserialize(json, participant.StateType, SaveJsonContext.Default);
     }
 }

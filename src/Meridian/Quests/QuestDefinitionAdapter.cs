@@ -1,29 +1,45 @@
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using Meridian.Data;
 
 namespace Meridian.Quests;
 
 /// <summary>
-/// Adapter class wrapping the Godot QuestDefinition Resource to implement the domain IQuestDefinition interface.
-/// Prevents Godot C# source generator failures on explicit interface properties in partial classes.
+/// Adapter wrapping the Godot <see cref="QuestDefinition"/> Resource to implement the domain
+/// <see cref="IQuestDefinition"/> interface. Projects the nested objective/reward Resources into
+/// engine-free records the QuestManager consumes.
 /// </summary>
 public class QuestDefinitionAdapter : IQuestDefinition
 {
     private readonly QuestDefinition _resource;
+    private readonly List<QuestObjective> _objectives = new();
+    private readonly List<QuestReward> _rewards = new();
 
     public string QuestId => _resource.QuestId;
     public string DisplayName => _resource.DisplayName;
     public string Description => _resource.Description;
 
-    public IReadOnlyList<string> ObjectiveIds => _resource.ObjectiveIds;
-    public IReadOnlyList<ObjectiveType> ObjectiveTypes => _resource.ObjectiveTypes;
-    public IReadOnlyList<string> ObjectiveTargets => _resource.ObjectiveTargets;
-    public IReadOnlyList<int> ObjectiveRequiredCounts => _resource.ObjectiveRequiredCounts;
+    public IReadOnlyList<QuestObjective> Objectives => _objectives;
+    public IReadOnlyList<QuestReward> Rewards => _rewards;
 
     public QuestDefinitionAdapter(QuestDefinition resource)
     {
         _resource = resource ?? throw new ArgumentNullException(nameof(resource));
+
+        foreach (var objective in _resource.Objectives)
+        {
+            if (objective != null)
+            {
+                _objectives.Add(new QuestObjective(objective.ObjectiveId, objective.Type, objective.Target, objective.RequiredCount));
+            }
+        }
+
+        foreach (var reward in _resource.Rewards)
+        {
+            if (reward != null)
+            {
+                _rewards.Add(new QuestReward(reward.ItemId, reward.Count));
+            }
+        }
     }
 }

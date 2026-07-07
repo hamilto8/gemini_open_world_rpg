@@ -40,7 +40,8 @@ public class WorldClock : IWorldClock
 
     public void AdvanceTime(double minutes)
     {
-        _totalGameMinutes += minutes;
+        // The clock owns time-scale application, so SetTimeScale is meaningful and testable (L4).
+        _totalGameMinutes += minutes * _timeScale;
     }
 
     public void ForceTotalMinutes(double minutes)

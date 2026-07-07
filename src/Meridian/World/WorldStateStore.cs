@@ -16,6 +16,7 @@ public class WorldStateStore : ISaveParticipant
 
     public string ParticipantId => "WorldStateStore";
     public int RestoreOrder => 15; // Restores immediately after world flags but before environments and player
+    public Type StateType => typeof(WorldFlagsDto);
 
     public void SaveCellState(string cellId, Dictionary<string, string> deltas)
     {

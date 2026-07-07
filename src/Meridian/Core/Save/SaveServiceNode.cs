@@ -14,7 +14,7 @@ public partial class SaveServiceNode : Node, ISaveService
     {
         // Resolve user directory path
         string userDir = ProjectSettings.GlobalizePath("user://saves");
-        _service = new SaveService(userDir);
+        _service = new SaveService(userDir, logger: msg => GD.PushWarning(msg));
 
         Services.Register<ISaveService>(this);
     }

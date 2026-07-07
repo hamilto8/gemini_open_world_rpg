@@ -9,9 +9,12 @@ namespace Meridian.UI;
 /// </summary>
 public partial class PerfHud : Control
 {
+    private const double UpdateIntervalSeconds = 0.25; // ~4 Hz
+
     private Label? _fpsLabel;
     private Label? _memoryLabel;
     private Label? _telemetryLabel;
+    private double _timeSinceUpdate;
 
     public override void _Ready()
     {
@@ -38,8 +41,17 @@ public partial class PerfHud : Control
 
     public override void _Process(double delta)
     {
+        // Throttle label rebuilds to ~4 Hz; rewriting three strings every frame is needless
+        // allocation churn the frame-budget section warns about (L10).
+        _timeSinceUpdate += delta;
+        if (_timeSinceUpdate < UpdateIntervalSeconds)
+        {
+            return;
+        }
+        _timeSinceUpdate = 0.0;
+
         double fps = Engine.GetFramesPerSecond();
-        double ms = delta * 1000.0;
+        double ms = fps > 0.0 ? 1000.0 / fps : 0.0;
 
         if (_fpsLabel != null)
         {

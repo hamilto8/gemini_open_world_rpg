@@ -1,50 +1,60 @@
 using Godot;
-using System.Collections.Generic;
+using System;
 
 namespace Meridian.Data;
 
 /// <summary>
-/// Resource definition class for rolling randomized loot drops based on weights.
+/// Resource definition for rolling randomized loot drops from weighted entries.
 /// Enforces Section 7.4 requirements.
 /// </summary>
 [GlobalClass]
 public partial class LootTableResource : Resource
 {
-    [Export] public Godot.Collections.Array<string> ItemIds { get; set; } = new();
-    [Export] public Godot.Collections.Array<int> Weights { get; set; } = new();
-    [Export] public Godot.Collections.Array<int> MinQuantities { get; set; } = new();
-    [Export] public Godot.Collections.Array<int> MaxQuantities { get; set; } = new();
+    [Export] public Godot.Collections.Array<LootEntryResource> Entries { get; set; } = new();
 
     /// <summary>
-    /// Rolls a random item drop from this table. Returns ItemId and rolled quantity.
+    /// Rolls a single weighted item drop. Returns the item id and rolled quantity, or ("", 0) if empty.
     /// </summary>
-    public (string ItemId, int Quantity) RollDrop()
+    /// <param name="rng">
+    /// Optional RNG. Defaults to <see cref="Random.Shared"/> — never a fresh time-seeded instance,
+    /// which would make bursts of rolls identical and allocate per call (M7). Pass a seeded
+    /// <see cref="Random"/> for deterministic tests.
+    /// </param>
+    public (string ItemId, int Quantity) RollDrop(Random? rng = null)
     {
-        if (ItemIds.Count == 0 || ItemIds.Count != Weights.Count)
+        rng ??= Random.Shared;
+
+        int totalWeight = 0;
+        foreach (var entry in Entries)
+        {
+            if (entry != null && entry.Weight > 0)
+            {
+                totalWeight += entry.Weight;
+            }
+        }
+
+        if (totalWeight <= 0)
         {
             return ("", 0);
         }
 
-        int totalWeight = 0;
-        foreach (int w in Weights)
+        int roll = rng.Next(0, totalWeight);
+        int cumulative = 0;
+
+        foreach (var entry in Entries)
         {
-            totalWeight += w;
-        }
-
-        if (totalWeight <= 0) return ("", 0);
-
-        int roll = new Random().Next(0, totalWeight);
-        int current = 0;
-
-        for (int i = 0; i < ItemIds.Count; i++)
-        {
-            current += Weights[i];
-            if (roll < current)
+            if (entry == null || entry.Weight <= 0)
             {
-                int min = i < MinQuantities.Count ? MinQuantities[i] : 1;
-                int max = i < MaxQuantities.Count ? MaxQuantities[i] : 1;
-                int quantity = min == max ? min : new Random().Next(min, max + 1);
-                return (ItemIds[i], quantity);
+                continue;
+            }
+
+            cumulative += entry.Weight;
+            if (roll < cumulative)
+            {
+                int min = entry.MinQuantity;
+                int max = Math.Max(entry.MinQuantity, entry.MaxQuantity);
+                int quantity = min == max ? min : rng.Next(min, max + 1);
+                return (entry.ItemId, quantity);
             }
         }
 

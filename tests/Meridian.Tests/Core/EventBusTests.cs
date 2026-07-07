@@ -60,4 +60,59 @@ public class EventBusTests
         Assert.Equal(0, callCount1);
         Assert.Equal(0, callCount2);
     }
+
+    [Fact]
+    public void Publish_ShouldInvokeAllHandlers_ForSameEvent()
+    {
+        var bus = new EventBus();
+        int a = 0, b = 0;
+        using var s1 = bus.Subscribe<TestEvent>(_ => a++);
+        using var s2 = bus.Subscribe<TestEvent>(_ => b++);
+
+        bus.Publish(new TestEvent("x", 1));
+
+        Assert.Equal(1, a);
+        Assert.Equal(1, b);
+    }
+
+    [Fact]
+    public void Unsubscribe_DuringPublish_ShouldNotAffectInFlightDispatch()
+    {
+        var bus = new EventBus();
+        int first = 0, second = 0;
+        IDisposable? sub2 = null;
+
+        var sub1 = bus.Subscribe<TestEvent>(_ =>
+        {
+            first++;
+            sub2?.Dispose(); // remove another handler mid-dispatch
+        });
+        sub2 = bus.Subscribe<TestEvent>(_ => second++);
+
+        // The immutable snapshot means the already-scheduled second handler still runs this time.
+        bus.Publish(new TestEvent("x", 1));
+        Assert.Equal(1, first);
+        Assert.Equal(1, second);
+
+        // Next publish reflects the unsubscribe.
+        bus.Publish(new TestEvent("y", 2));
+        Assert.Equal(2, first);
+        Assert.Equal(1, second);
+
+        sub1.Dispose();
+    }
+
+    [Fact]
+    public void Dispose_ShouldBeIdempotent()
+    {
+        var bus = new EventBus();
+        int count = 0;
+        var sub = bus.Subscribe<TestEvent>(_ => count++);
+
+        sub.Dispose();
+        sub.Dispose(); // second dispose must be a harmless no-op
+
+        bus.Publish(new TestEvent("x", 1));
+        Assert.Equal(0, count);
+    }
 }

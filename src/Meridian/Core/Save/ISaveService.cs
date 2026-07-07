@@ -19,6 +19,13 @@ public interface ISaveParticipant
     int RestoreOrder { get; }
 
     /// <summary>
+    /// The concrete DTO <see cref="Type"/> that <see cref="CaptureState"/> returns and
+    /// <see cref="RestoreState"/> accepts. Declared explicitly so the save service can
+    /// (de)serialize by type rather than guessing from the participant id.
+    /// </summary>
+    Type StateType { get; }
+
+    /// <summary>
     /// Captures the current mutable runtime state into a serializable DTO (no Godot Node/Resource references).
     /// Called synchronously on the main thread during save initiation.
     /// </summary>

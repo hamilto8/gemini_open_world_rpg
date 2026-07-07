@@ -291,3 +291,19 @@ No tests exist for any of the following (all headless-testable today, no extract
 2. T1: extract Node-bound logic to domain classes, replace tautology tests (pairs with C3/C4/H1 fixes).
 3. T3: serialize or de-static the locator usage before the suite grows.
 4. T4 backlog, highest-value first: StatBlock unregistered-stat, SaveService `.bak` fallback, QuestManager desynced arrays, streamer lifecycle extraction.
+
+---
+
+# Resolution Log (addendum, 2026-07-07)
+
+Fixes for the findings above were applied. Build is clean (`dotnet build` — 0 warnings/0 errors) and the suite grew from 41 to **98 passing tests**. Disposition per finding:
+
+**Critical:** C1 fixed — `ServicesNode` deleted (removed from autoloads); the static locator needs no boot reset, so it no longer wipes the `EventBus` registration. C2 fixed — `WeatherSystemNode` now implements/registers `IWeatherSystem` (id→profile map, `ChangeWeather`/`ForceWeather`). C3 fixed — Vehicle input context allows the shared movement actions + `brake`; dead `vehicle_*` registrations removed. C4 fixed — throttle uses `+MoveY`, extracted into a tested `VehicleMotorModel`. C5 fixed — `NpcLifeController` stores/disposes its token; `WeatherSystemNode`'s dead subscription removed.
+
+**High:** H1 — hit zone derived from the target via `IHitZoneResolver`, camera null-risk gone. H2 — shooter RID excluded from the ray. H3 — `StatBlock.GetStat` runs the modifier pipeline for missing bases; `reload_speed` registered. H4 — `ISaveParticipant.StateType` replaces substring dispatch; unknown ids logged. H5 — `.bak` fallback on corrupt primary, per-participant restore, logging. H6 — `Callable.From` deferred, int overload deleted, redundant scene reload skipped. H7 — dictionary cell index, `StreamingRings` hysteresis, per-frame instantiation budget, `ProcessMode.Disabled` on Visual, load-cancel, velocity lookahead. H8 — `PercentAdd` is now a fraction convention project-wide; docs aligned.
+
+**Medium:** M1 (dropped `AllowUnsafeBlocks`; `Directory.Build.props` already present), M2 (ADR‑0010 records the autoload deviation + migration plan), M3 (movement/skill-point magic numbers → profile data), M4, M5 (rewards granted, save participant, enumeration snapshot), M6 (nested `QuestObjective`/`QuestReward`/`LootEntry` resources), M7 (`Random.Shared`/injectable), M8 (`GetGravity()`), M9, M10, M11 (`CameraRig` reads `InputFrame`, data sensitivity, controller owns `MouseMode`), M12 (validator parses `.tres` for dangling refs + duplicate ids), M13 (`IPersistentSceneObject` + descendant walk), M14 (mocks moved to test project; `NoWarn` removed by supplying `GodotProjectDir`), M15 (documented main-thread, zero-alloc, reentrancy-safe bus), M16 (`UpgradeBench` transacts truthfully via `IInventoryProvider`), M17 (rollback restores real instances).
+
+**Low:** L1 (`IWorldStreamer`/`IMusicManager`), L2 (unregister symmetry on Systems-scoped nodes), L4 (`WorldClock` owns time scale), L5 (`DummyTarget` uses an owned `Tween`), L6 (`InputFrame` doc corrected; `LookX/Y` populated), L7 (auto-stub gated behind `AllowUnregisteredItems`), L8/L9 (dialogue-action + audio stubs marked TODO), L10 (`PerfHud` throttled to ~4 Hz), L11 (HUD driven by `StatChanged`), L12 (unused usings/fields/params removed; `ItemResource.Behaviors` cached), L13 (`.uid` files confirmed committable, not git-ignored). L3 left as-is — an explicit "consider" micro-optimization, not a defect.
+
+**Tests:** T1 (domain extraction: `VehicleMotorModel`, `DamagePipeline`, `WeaponRuntime`, `StreamingRings`; tautology tests rewritten), T2 (bug-pinning tests updated deliberately; JSON round-trip with a non-substring id added), T3 (parallelization disabled — shared static locator race), T4 (coverage added across StatBlock, EventBus reentrancy, WorldClock, QuestManager, SaveService `.bak`, streaming rings, locomotion boundaries, inventory stack split), T5 (dead arrangements removed, precision overloads).

@@ -54,13 +54,24 @@ public record TimeWeatherDto(
     int ForecastSeed
 );
 
+/// <summary>
+/// Quest progress DTO: quest states plus per-objective progress counters.
+/// </summary>
+public record QuestSaveDto(
+    Dictionary<string, string> QuestStates,
+    Dictionary<string, Dictionary<string, int>> ObjectiveProgress
+);
+
 [JsonSourceGenerationOptions(WriteIndented = true)]
 [JsonSerializable(typeof(GameSaveData))]
 [JsonSerializable(typeof(SaveHeaderDto))]
 [JsonSerializable(typeof(PlayerStateDto))]
 [JsonSerializable(typeof(WorldFlagsDto))]
 [JsonSerializable(typeof(TimeWeatherDto))]
+[JsonSerializable(typeof(QuestSaveDto))]
 [JsonSerializable(typeof(Dictionary<string, string>))]
+[JsonSerializable(typeof(Dictionary<string, int>))]
+[JsonSerializable(typeof(Dictionary<string, Dictionary<string, int>>))]
 public partial class SaveJsonContext : JsonSerializerContext
 {
 }

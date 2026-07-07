@@ -37,26 +37,23 @@ public partial class MovementMotor : Node
 
         Vector3 velocity = _body.Velocity;
 
-        // 1. Apply Gravity
+        // 1. Apply Gravity. CharacterBody3D.GetGravity() returns the acceleration vector (Godot 4.3+),
+        //    which also respects gravity-override Areas — unlike the previous AreaGetParam(space, ...) misuse.
         if (!_body.IsOnFloor())
         {
-            float gravity = (float)PhysicsServer3D.AreaGetParam(
-                _body.GetViewport().FindWorld3D().Space,
-                PhysicsServer3D.AreaParameter.Gravity
-            );
-            velocity.Y -= gravity * Profile.GravityMultiplier * (float)delta;
+            velocity += _body.GetGravity() * Profile.GravityMultiplier * (float)delta;
         }
 
         // 2. Apply Jump force
         if (input.JumpPressed && _body.IsOnFloor() && state != LocomotionState.Crouch)
         {
             velocity.Y = Profile.JumpVelocity;
-            
+
             // Subtract jump stamina cost if stamina is managed
             if (_stats != null)
             {
                 float stamina = _stats.GetStat("stamina");
-                _stats.SetBaseStat("stamina", Math.Max(0f, stamina - 15f));
+                _stats.SetBaseStat("stamina", Math.Max(0f, stamina - Profile.JumpStaminaCost));
             }
         }
 
@@ -93,7 +90,7 @@ public partial class MovementMotor : Node
         if (state == LocomotionState.Sprint && _stats != null)
         {
             float stamina = _stats.GetStat("stamina");
-            _stats.SetBaseStat("stamina", Math.Max(0f, stamina - (float)(25f * delta)));
+            _stats.SetBaseStat("stamina", Math.Max(0f, stamina - (float)(Profile.SprintStaminaDrainPerSecond * delta)));
         }
         // Stamina recovery when not sprinting
         else if (state != LocomotionState.Sprint && _stats != null)
@@ -102,7 +99,7 @@ public partial class MovementMotor : Node
             float maxStamina = _stats.GetStat("max_stamina");
             if (stamina < maxStamina)
             {
-                _stats.SetBaseStat("stamina", Math.Min(maxStamina, stamina + (float)(15f * delta)));
+                _stats.SetBaseStat("stamina", Math.Min(maxStamina, stamina + (float)(Profile.StaminaRegenPerSecond * delta)));
             }
         }
     }
@@ -119,18 +116,18 @@ public partial class MovementMotor : Node
             _ => Profile.RunSpeed
         };
 
-        // Aiming reduces movement speed by 40% (Section 5.3 aiming speed caps)
+        // Aiming reduces movement speed (Section 5.3 aiming speed caps)
         if (isAiming)
         {
-            baseSpeed *= 0.6f;
+            baseSpeed *= Profile.AimSpeedMultiplier;
         }
 
         // Apply StatBlock modifiers to speed if available
-        if (_stats != null)
+        if (_stats != null && Profile.BaseMoveSpeed > 0f)
         {
             float modSpeed = _stats.GetStat("move_speed");
-            // If modified speed deviates from default (5.0), apply the ratio to the current speed
-            float ratio = modSpeed / 5.0f;
+            // Scale by how far the modified move_speed deviates from the authored baseline.
+            float ratio = modSpeed / Profile.BaseMoveSpeed;
             baseSpeed *= ratio;
         }
 

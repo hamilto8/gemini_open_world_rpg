@@ -1,7 +1,6 @@
 using Godot;
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using Meridian.Core;
 using Meridian.Core.Save;
 using Meridian.Data;
@@ -26,27 +25,43 @@ public enum CellState
 /// time-slices instantiation on the main thread to prevent frame hitching.
 /// Enforces Section 4.3 and 4.4 requirements.
 /// </summary>
-public partial class WorldStreamerNode : Node
+public partial class WorldStreamerNode : Node, IWorldStreamer
 {
     [Export] public RegionDefinition? ActiveRegion { get; set; }
+
+    // Ring enter radii (a cell upgrades to this ring at/inside the radius).
     [Export] public float ActiveRadius { get; set; } = 120.0f;
     [Export] public float SimulatedRadius { get; set; } = 250.0f;
     [Export] public float VisualRadius { get; set; } = 500.0f;
 
+    /// <summary>Extra distance a cell must travel past its enter radius before it downgrades (anti-thrash).</summary>
+    [Export] public float HysteresisMargin { get; set; } = 30.0f;
+
+    /// <summary>Interest point leads the player by velocity × this many seconds so cells stream in ahead (§4.4).</summary>
+    [Export] public float VelocityLookaheadSeconds { get; set; } = 0.5f;
+
+    /// <summary>Max cell instantiations per frame — time-slices arrival bursts so they never spike a frame (§4.3).</summary>
+    [Export] public int MaxCellInstancesPerFrame { get; set; } = 1;
+
     private readonly Dictionary<Vector2I, CellState> _cellStates = new();
     private readonly Dictionary<Vector2I, Node> _instancedCells = new();
+    private readonly Dictionary<Vector2I, CellDefinition> _cellsByGrid = new();
     private readonly WorldStateStore _stateStore = new();
-    
+
     private ICellLoader? _loader;
     private Node3D? _player;
+    private RegionDefinition? _indexedRegion;
+    private Vector2 _lastInterestSample;
+    private bool _hasInterestSample;
+    private int _instancesThisFrame;
 
     public WorldStateStore StateStore => _stateStore;
     public IReadOnlyDictionary<Vector2I, CellState> CellStates => _cellStates;
+    public string? CurrentRegionId => ActiveRegion?.Id;
 
     public override void _EnterTree()
     {
-        Services.Register<WorldStreamerNode>(this);
-        Services.Register<WorldStateStore>(_stateStore);
+        Services.Register<IWorldStreamer>(this);
     }
 
     public override void _Ready()
@@ -66,6 +81,11 @@ public partial class WorldStreamerNode : Node
         {
             saveService.UnregisterParticipant(_stateStore);
         }
+
+        if (Services.TryGet<IWorldStreamer>(out var current) && ReferenceEquals(current, this))
+        {
+            Services.Unregister<IWorldStreamer>();
+        }
     }
 
     public void SetLoader(ICellLoader loader)
@@ -77,136 +97,207 @@ public partial class WorldStreamerNode : Node
     {
         if (ActiveRegion == null || _loader == null) return;
 
-        // Lazy load player reference
-        if (_player == null)
+        EnsureCellIndex();
+        ResolvePlayer();
+
+        Vector2 interest = ComputeInterestPoint((float)delta);
+        var rings = new StreamingRings(ActiveRadius, SimulatedRadius, VisualRadius, HysteresisMargin);
+
+        _instancesThisFrame = 0;
+
+        // Only cells that actually have a definition are considered (dictionary index, not a full-grid scan).
+        foreach (var (gridPos, cellDef) in _cellsByGrid)
         {
-            if (Services.TryGet<IPlayerController>(out var pc) && pc?.PossessedEntity is Node3D avatar)
-            {
-                _player = avatar;
-            }
-        }
+            Vector2 cellCenter = CellCenter(gridPos);
+            float distance = interest.DistanceTo(cellCenter);
+            CellState current = _cellStates.TryGetValue(gridPos, out var s) ? s : CellState.Unloaded;
+            CellState target = rings.EvaluateTarget(current, distance);
 
-        Vector3 playerPos = _player?.GlobalPosition ?? Vector3.Zero;
-        Vector2 playerPos2D = new Vector2(playerPos.X, playerPos.Z);
-
-        // Update lifecycle state of all cells in the active region bounds
-        for (int x = ActiveRegion.Bounds.Position.X; x < ActiveRegion.Bounds.End.X; x++)
-        {
-            for (int y = ActiveRegion.Bounds.Position.Y; y < ActiveRegion.Bounds.End.Y; y++)
-            {
-                Vector2I gridPos = new Vector2I(x, y);
-                Vector2 cellCenter = new Vector2(
-                    (x + 0.5f) * ActiveRegion.CellSize,
-                    (y + 0.5f) * ActiveRegion.CellSize
-                );
-
-                float distance = playerPos2D.DistanceTo(cellCenter);
-                CellState targetState = EvaluateTargetState(distance);
-
-                UpdateCellLifecycle(gridPos, targetState);
-            }
+            StepCell(gridPos, cellDef, current, target);
         }
     }
 
-    private CellState EvaluateTargetState(float distance)
+    private void EnsureCellIndex()
     {
-        if (distance <= ActiveRadius) return CellState.Active;
-        if (distance <= SimulatedRadius) return CellState.Simulated;
-        if (distance <= VisualRadius) return CellState.Visual;
-        return CellState.Unloaded;
-    }
+        if (ReferenceEquals(_indexedRegion, ActiveRegion)) return;
 
-    private void UpdateCellLifecycle(Vector2I gridPos, CellState targetState)
-    {
-        if (!_cellStates.TryGetValue(gridPos, out var currentState))
+        _cellsByGrid.Clear();
+        if (ActiveRegion != null)
         {
-            currentState = CellState.Unloaded;
-        }
-
-        if (currentState == targetState) return;
-
-        // Process Load/Unload sequence
-        if (targetState != CellState.Unloaded && currentState == CellState.Unloaded)
-        {
-            // Transition to loading
-            _cellStates[gridPos] = CellState.Loading;
-            var cellDef = ActiveRegion?.Cells.FirstOrDefault(c => c.GridPosition == gridPos);
-            if (cellDef != null && !string.IsNullOrEmpty(cellDef.ScenePath))
+            foreach (var cell in ActiveRegion.Cells)
             {
-                _loader?.RequestLoad(cellDef.ScenePath);
-            }
-        }
-        else if (currentState == CellState.Loading && _loader != null)
-        {
-            var cellDef = ActiveRegion?.Cells.FirstOrDefault(c => c.GridPosition == gridPos);
-            if (cellDef != null && _loader.IsLoadComplete(cellDef.ScenePath))
-            {
-                var cellNode = _loader.InstantiateCell(cellDef.ScenePath);
-                if (cellNode != null)
+                if (cell != null)
                 {
-                    AddChild(cellNode);
-                    _instancedCells[gridPos] = cellNode;
-                    _cellStates[gridPos] = CellState.Visual; // Render-only state initially
-
-                    // Rehydrate modifications from state store (Section 4.3)
-                    string cellKey = $"{ActiveRegion?.Id}_{gridPos.X}_{gridPos.Y}";
-                    if (_stateStore.TryGetCellState(cellKey, out var deltas) && deltas != null)
-                    {
-                        ApplyCellDeltas(cellNode, deltas);
-                    }
+                    _cellsByGrid[cell.GridPosition] = cell;
                 }
             }
         }
-        else if (targetState == CellState.Unloaded && currentState != CellState.Unloaded)
-        {
-            // Unload cell, capture state modifications first
-            if (_instancedCells.TryGetValue(gridPos, out var cellNode))
-            {
-                string cellKey = $"{ActiveRegion?.Id}_{gridPos.X}_{gridPos.Y}";
-                var deltas = CaptureCellDeltas(cellNode);
-                _stateStore.SaveCellState(cellKey, deltas);
+        _indexedRegion = ActiveRegion;
+    }
 
-                cellNode.QueueFree();
-                _instancedCells.Remove(gridPos);
-            }
-            _cellStates[gridPos] = CellState.Unloaded;
-        }
-        else
+    private void ResolvePlayer()
+    {
+        if (_player != null) return;
+        if (Services.TryGet<IPlayerController>(out var pc) && pc?.PossessedEntity is Node3D avatar)
         {
-            // Update mid-ring states directly (Visual ↔ Simulated ↔ Active)
-            _cellStates[gridPos] = targetState;
-            if (_instancedCells.TryGetValue(gridPos, out var cellNode))
-            {
-                // Toggle physics and processing flags (Section 4.3 rings)
-                bool process = targetState == CellState.Active || targetState == CellState.Simulated;
-                cellNode.ProcessMode = process ? ProcessModeEnum.Inherit : ProcessModeEnum.Disabled;
-            }
+            _player = avatar;
         }
     }
 
-    private Dictionary<string, string> CaptureCellDeltas(Node cellNode)
+    private Vector2 ComputeInterestPoint(float delta)
     {
-        var deltas = new Dictionary<string, string>();
-        // Walk child nodes and find looted chests/containers
-        // e.g. if child is a Chest and has property IsOpen, capture it
-        foreach (var child in cellNode.GetChildren())
+        Vector3 playerPos = _player?.GlobalPosition ?? Vector3.Zero;
+        Vector2 pos2D = new Vector2(playerPos.X, playerPos.Z);
+
+        Vector2 velocity = Vector2.Zero;
+        if (_hasInterestSample && delta > 0f)
         {
-            if (child.Get("IsOpen").VariantType != Variant.Type.Nil)
+            velocity = (pos2D - _lastInterestSample) / delta;
+        }
+        _lastInterestSample = pos2D;
+        _hasInterestSample = true;
+
+        // Lead the interest point by projected velocity so cells ahead stream in before arrival (§4.4).
+        return pos2D + velocity * VelocityLookaheadSeconds;
+    }
+
+    private Vector2 CellCenter(Vector2I gridPos)
+    {
+        float cellSize = ActiveRegion?.CellSize ?? 1f;
+        return new Vector2((gridPos.X + 0.5f) * cellSize, (gridPos.Y + 0.5f) * cellSize);
+    }
+
+    private string CellKey(Vector2I gridPos) => $"{ActiveRegion?.Id}_{gridPos.X}_{gridPos.Y}";
+
+    private void StepCell(Vector2I gridPos, CellDefinition cellDef, CellState current, CellState target)
+    {
+        switch (current)
+        {
+            case CellState.Unloaded:
+                if (target != CellState.Unloaded)
+                {
+                    _cellStates[gridPos] = CellState.Loading;
+                    if (!string.IsNullOrEmpty(cellDef.ScenePath))
+                    {
+                        _loader?.RequestLoad(cellDef.ScenePath);
+                    }
+                }
+                break;
+
+            case CellState.Loading:
+                if (target == CellState.Unloaded)
+                {
+                    // Interest point left before instantiation — abandon the load rather than
+                    // instantiate a cell nobody wants (H7 load-cancel).
+                    _cellStates[gridPos] = CellState.Unloaded;
+                }
+                else if (_instancesThisFrame < MaxCellInstancesPerFrame
+                         && !string.IsNullOrEmpty(cellDef.ScenePath)
+                         && _loader != null
+                         && _loader.IsLoadComplete(cellDef.ScenePath))
+                {
+                    InstantiateCell(gridPos, cellDef);
+                }
+                break;
+
+            default: // Visual / Simulated / Active — already instanced
+                if (target == CellState.Unloaded)
+                {
+                    UnloadCell(gridPos);
+                }
+                else if (target != current)
+                {
+                    _cellStates[gridPos] = target;
+                    if (_instancedCells.TryGetValue(gridPos, out var cellNode))
+                    {
+                        // Visual is render-only (processing disabled); Simulated/Active process (§4.3).
+                        bool process = target is CellState.Active or CellState.Simulated;
+                        cellNode.ProcessMode = process ? ProcessModeEnum.Inherit : ProcessModeEnum.Disabled;
+                    }
+                }
+                break;
+        }
+    }
+
+    private void InstantiateCell(Vector2I gridPos, CellDefinition cellDef)
+    {
+        var cellNode = _loader!.InstantiateCell(cellDef.ScenePath);
+        if (cellNode == null) return;
+
+        _instancesThisFrame++;
+        AddChild(cellNode);
+        _instancedCells[gridPos] = cellNode;
+
+        // Freshly instanced cells enter Visual: render-only, processing disabled per doc §4.3.
+        cellNode.ProcessMode = ProcessModeEnum.Disabled;
+        _cellStates[gridPos] = CellState.Visual;
+
+        // Rehydrate persisted modifications from the state store (Section 4.3).
+        if (_stateStore.TryGetCellState(CellKey(gridPos), out var deltas) && deltas != null)
+        {
+            ApplyCellDeltas(cellNode, deltas);
+        }
+    }
+
+    private void UnloadCell(Vector2I gridPos)
+    {
+        if (_instancedCells.TryGetValue(gridPos, out var cellNode))
+        {
+            // Capture dynamic-object state before freeing (Section 4.3).
+            _stateStore.SaveCellState(CellKey(gridPos), CaptureCellDeltas(cellNode));
+            cellNode.QueueFree();
+            _instancedCells.Remove(gridPos);
+        }
+        _cellStates[gridPos] = CellState.Unloaded;
+    }
+
+    private static Dictionary<string, string> CaptureCellDeltas(Node cellNode)
+    {
+        // Walk all descendants (not just one level) for typed persistent objects, keyed by their
+        // stable PersistentId rather than node name (M13). Flatten each object's state as "id.key".
+        var deltas = new Dictionary<string, string>();
+        foreach (var persistent in FindPersistentObjects(cellNode))
+        {
+            foreach (var pair in persistent.CaptureState())
             {
-                bool isOpen = (bool)child.Get("IsOpen");
-                deltas[child.Name] = isOpen.ToString();
+                deltas[$"{persistent.PersistentId}.{pair.Key}"] = pair.Value;
             }
         }
         return deltas;
     }
 
-    private void ApplyCellDeltas(Node cellNode, Dictionary<string, string> deltas)
+    private static void ApplyCellDeltas(Node cellNode, Dictionary<string, string> deltas)
     {
-        foreach (var child in cellNode.GetChildren())
+        foreach (var persistent in FindPersistentObjects(cellNode))
         {
-            if (deltas.TryGetValue(child.Name, out var valStr) && bool.TryParse(valStr, out bool isOpen))
+            string prefix = persistent.PersistentId + ".";
+            var state = new Dictionary<string, string>();
+            foreach (var pair in deltas)
             {
-                child.Set("IsOpen", isOpen);
+                if (pair.Key.StartsWith(prefix, StringComparison.Ordinal))
+                {
+                    state[pair.Key.Substring(prefix.Length)] = pair.Value;
+                }
+            }
+
+            if (state.Count > 0)
+            {
+                persistent.RestoreState(state);
+            }
+        }
+    }
+
+    private static IEnumerable<IPersistentSceneObject> FindPersistentObjects(Node root)
+    {
+        foreach (var child in root.GetChildren())
+        {
+            if (child is IPersistentSceneObject persistent)
+            {
+                yield return persistent;
+            }
+            foreach (var nested in FindPersistentObjects(child))
+            {
+                yield return nested;
             }
         }
     }

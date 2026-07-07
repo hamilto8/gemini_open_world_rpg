@@ -17,6 +17,14 @@ public class InventoryModel
     private readonly Dictionary<string, IItemDefinition> _definitions = new(StringComparer.OrdinalIgnoreCase);
 
     public float MaxWeight { get; set; } = 50.0f;
+
+    /// <summary>
+    /// When true, adding an item whose definition isn't registered auto-creates a stub definition
+    /// (convenient for tests). Off by default so production surfaces missing content instead of
+    /// masking it — the ContentValidator/registration is expected to catch unknown ids (L7).
+    /// </summary>
+    public bool AllowUnregisteredItems { get; set; }
+
     public event Action? InventoryChanged;
 
     public IReadOnlyList<ItemInstance> Items => _items;
@@ -65,7 +73,11 @@ public class InventoryModel
 
         if (!_definitions.TryGetValue(itemInstance.DefinitionId, out var def))
         {
-            // Register auto-stub definition if unregistered to ease testing
+            if (!AllowUnregisteredItems)
+            {
+                // Unknown content is a data error, not something to silently stub in production (L7).
+                return false;
+            }
             def = new BasicItemDefinition(itemInstance.DefinitionId);
             _definitions[def.Id] = def;
         }
@@ -102,8 +114,18 @@ public class InventoryModel
         return true;
     }
 
-    public bool RemoveItem(string definitionId, int count)
+    public bool RemoveItem(string definitionId, int count) => RemoveItem(definitionId, count, out _);
+
+    /// <summary>
+    /// Removes <paramref name="count"/> of an item and reports the actual instances removed via
+    /// <paramref name="removed"/>. Whole stacks are returned as their real <see cref="ItemInstance"/>
+    /// objects (preserving <see cref="WeaponInstance"/> payload/ammo/mods), so callers such as
+    /// <c>InventoryTransaction</c> can restore them faithfully on rollback (M17).
+    /// </summary>
+    public bool RemoveItem(string definitionId, int count, out List<ItemInstance> removed)
     {
+        removed = new List<ItemInstance>();
+
         if (GetItemCount(definitionId) < count)
         {
             return false;
@@ -119,10 +141,13 @@ public class InventoryModel
                 {
                     remaining -= item.StackCount;
                     _items.RemoveAt(i);
+                    removed.Add(item); // the real instance, with any payload intact
                 }
                 else
                 {
                     item.StackCount -= remaining;
+                    // Only part of a stack was taken; represent the removed portion by count.
+                    removed.Add(new ItemInstance(definitionId, remaining));
                     remaining = 0;
                 }
             }

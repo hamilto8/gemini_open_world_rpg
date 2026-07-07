@@ -67,6 +67,7 @@ public class InventoryTransaction
         private readonly InventoryModel _inventory = inventory;
         private readonly string _definitionId = definitionId;
         private readonly int _count = count;
+        private List<ItemInstance>? _removed;
 
         public override bool Validate()
         {
@@ -75,16 +76,24 @@ public class InventoryTransaction
 
         public override void Apply()
         {
-            if (!_inventory.RemoveItem(_definitionId, _count))
+            if (!_inventory.RemoveItem(_definitionId, _count, out var removed))
             {
                 throw new InvalidOperationException("Failed to remove item during transaction execution");
             }
+            _removed = removed;
         }
 
         public override void Rollback()
         {
-            // Restore removed items. Creating a generic ItemInstance for backup.
-            _inventory.AddItem(new ItemInstance(_definitionId, _count));
+            // Re-add the exact instances that were removed, preserving unique-item payload (M17).
+            if (_removed == null)
+            {
+                return;
+            }
+            foreach (var instance in _removed)
+            {
+                _inventory.AddItem(instance);
+            }
         }
     }
 

@@ -95,16 +95,18 @@ public class InputContextService : IInputContextService
         RegisterActionForContext(InputContextType.OnFoot, "fire");
         RegisterActionForContext(InputContextType.OnFoot, "aim");
         RegisterActionForContext(InputContextType.OnFoot, "reload");
+        RegisterActionForContext(InputContextType.OnFoot, "look");
         RegisterActionForContext(InputContextType.OnFoot, "menu_open");
 
-        // Vehicle defaults
-        RegisterActionForContext(InputContextType.Vehicle, "vehicle_throttle");
-        RegisterActionForContext(InputContextType.Vehicle, "vehicle_brake");
-        RegisterActionForContext(InputContextType.Vehicle, "vehicle_steer_left");
-        RegisterActionForContext(InputContextType.Vehicle, "vehicle_steer_right");
-        RegisterActionForContext(InputContextType.Vehicle, "vehicle_handbrake");
-        RegisterActionForContext(InputContextType.Vehicle, "vehicle_horn");
-        RegisterActionForContext(InputContextType.Vehicle, "vehicle_headlights");
+        // Vehicle defaults: the shared movement actions drive throttle (forward/back) and steering
+        // (left/right) via InputFrame.MoveY/MoveX, plus a held brake and the exit interaction.
+        // (Section 11.5 — vehicles reuse the possession/input pipeline, not a separate action set.)
+        RegisterActionForContext(InputContextType.Vehicle, "move_forward");
+        RegisterActionForContext(InputContextType.Vehicle, "move_backward");
+        RegisterActionForContext(InputContextType.Vehicle, "move_left");
+        RegisterActionForContext(InputContextType.Vehicle, "move_right");
+        RegisterActionForContext(InputContextType.Vehicle, "brake");
+        RegisterActionForContext(InputContextType.Vehicle, "look");
         RegisterActionForContext(InputContextType.Vehicle, "interact");
         RegisterActionForContext(InputContextType.Vehicle, "menu_open");
 

@@ -21,13 +21,14 @@ public class SystemsDepthTests
 
         var manager = new ProgressionManager(profile);
         var stats = new StatBlock();
-        stats.SetBaseStat("reload_speed", 1.0f);
+        // No reload_speed setup here: production StatBlock registers it (base 1.0), so the
+        // fast_reload perk works against real defaults rather than test-only scaffolding (H3).
 
         Assert.Equal(1, manager.Level);
         Assert.Equal(0, manager.SkillPoints);
 
         // Add 100 XP -> level up to 2 (needs 100 XP)
-        manager.AddXp(100, stats);
+        manager.AddXp(100);
         Assert.Equal(2, manager.Level);
         Assert.Equal(2, manager.SkillPoints);
 

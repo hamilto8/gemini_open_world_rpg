@@ -14,4 +14,7 @@ public partial class CameraModeResource : Resource
     [Export] public float Fov { get; set; } = 75.0f;
     [Export] public float ShoulderOffset { get; set; } = 0.5f; // Side alignment
     [Export] public float SmoothSpeed { get; set; } = 15.0f; // Interpolation weight
+
+    /// <summary>Look sensitivity (radians per pixel of mouse motion) for this mode — data, not hardcoded.</summary>
+    [Export] public float MouseSensitivity { get; set; } = 0.003f;
 }

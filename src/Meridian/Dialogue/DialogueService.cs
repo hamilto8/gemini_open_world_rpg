@@ -22,6 +22,11 @@ public class DialogueChoice
 {
     public string Text { get; }
     public string TargetNodeId { get; }
+
+    // TODO(vocabulary): Phase-6 scaffolding. Dialogue outcomes should route through the shared
+    // GameActionResource vocabulary (doc §3.6/§13) rather than an arbitrary delegate, so writers can
+    // trigger effects by name and conditions can gate them. GameActionResource/ConditionResource are
+    // the two cross-cutting primitives the design leans on that remain unimplemented (L8).
     public Action? ActionEffect { get; }
 
     public DialogueChoice(string text, string targetNodeId, Action? actionEffect = null)

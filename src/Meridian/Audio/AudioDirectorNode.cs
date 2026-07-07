@@ -39,6 +39,8 @@ public partial class AudioDirectorNode : Node, IAudioDirector
 
     public void PlaySoundCue(string cueId)
     {
+        // TODO(audio): stub — resolve cueId to an AudioStream via a SoundCue resource and play it
+        // through a pooled AudioStreamPlayer. Currently logs only; not a working audio system (L9).
         GD.Print($"[AudioDirector] Playing sound cue: {cueId}");
     }
 }

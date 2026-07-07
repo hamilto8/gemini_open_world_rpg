@@ -18,10 +18,10 @@ public class QuestDialogueTests
         var quest = new BasicQuestDefinition
         {
             QuestId = "scrap_metal_quest",
-            ObjectiveIds = new List<string> { "gather_scrap" },
-            ObjectiveTypes = new List<ObjectiveType> { ObjectiveType.GatherItem },
-            ObjectiveTargets = new List<string> { "metal_scrap" },
-            ObjectiveRequiredCounts = new List<int> { 5 }
+            Objectives = new List<QuestObjective>
+            {
+                new("gather_scrap", ObjectiveType.GatherItem, "metal_scrap", 5),
+            },
         };
 
         manager.RegisterQuest(quest);

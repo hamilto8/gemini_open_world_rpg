@@ -5,8 +5,9 @@ using Meridian.Items;
 namespace Meridian.Scenes.World;
 
 /// <summary>
-/// Workbench interactable prop performing atomic upgrades on possessed weapons.
-/// Enforces Section 6.4 and 7.5 requirements.
+/// Workbench interactable that performs atomic upgrades on the player's equipped weapon.
+/// Has no private economy logic — it drives the shared <see cref="InventoryTransaction"/> so future
+/// benches (garage, gear station) reuse the flow. Enforces Section 6.4 and 7.5 requirements.
 /// </summary>
 public partial class UpgradeBench : StaticBody3D, IInteractable
 {
@@ -18,51 +19,53 @@ public partial class UpgradeBench : StaticBody3D, IInteractable
 
     public bool CanInteract(Node3D interactor)
     {
-        // Must possess a WeaponInstance to upgrade
-        if (Services.TryGet<IPlayerController>(out var pc) && pc?.PossessedEntity is IPossessable possessed)
-        {
-            // Verify interactor is the player possessed avatar and has a WeaponInstance equipped
-            return true;
-        }
-        return false;
+        // Only interactable when the player actually has a weapon equipped to upgrade.
+        return Services.TryGet<IInventoryProvider>(out var provider)
+            && provider?.EquippedWeapon != null;
     }
 
     public void Interact(Node3D interactor)
     {
-        // Simulated upgrade bench screen logic for Phase 2:
-        // We find the player inventory and check if we can perform the upgrade atomically
-        if (!Services.TryGet<IPlayerController>(out var pc) || pc?.PossessedEntity == null)
+        if (!Services.TryGet<IInventoryProvider>(out var provider) || provider == null)
         {
-            GD.PrintErr("[UpgradeBench] Player controller or possessed entity not found.");
+            GD.PrintErr("[UpgradeBench] No inventory provider available.");
             return;
         }
 
-        // Realistically, the player controller would have an InventoryModel
-        // In our architecture, the PlayerController holds the player state.
-        // Let's look up or simulate the player inventory (or construct an transaction)
-        GD.Print("[UpgradeBench] Open Upgrade Bench interface...");
-        
-        // For Phase 2, we execute a simulated upgrade transaction directly (Section 6.4 Crafting/Upgrade bench)
-        // Deducts BaseMaterialCost metal_scrap and upgrades the weapon level
-        ExecuteSimulatedUpgrade();
+        bool success = TryUpgrade(provider);
+
+        if (Services.TryGet<IEventBus>(out var eventBus) && eventBus != null)
+        {
+            // Report the real outcome, not an unconditional success (M16).
+            eventBus.Publish(new UpgradeAttemptedEvent(ObjectName, success));
+        }
     }
 
-    private void ExecuteSimulatedUpgrade()
+    private bool TryUpgrade(IInventoryProvider provider)
     {
-        // Try to perform atomic transaction
-        // Since we don't have visual inventory menus, this happens inside this script for Phase 2 verification
-        if (Services.TryGet<IPlayerController>(out var pc) && pc != null)
+        var weapon = provider.EquippedWeapon;
+        if (weapon == null)
         {
-            // Simple notification to event bus
-            if (Services.TryGet<IEventBus>(out var eventBus) && eventBus != null)
-            {
-                eventBus.Publish(new UpgradeAttemptedEvent(ObjectName, success: true));
-            }
+            return false;
         }
+
+        // Atomic material deduction (Section 7.5): validate-all then apply-all, or nothing.
+        var transaction = new InventoryTransaction();
+        transaction.DeductItem(provider.Inventory, RequiredMaterialId, BaseMaterialCost);
+
+        if (!transaction.Execute())
+        {
+            GD.Print($"[UpgradeBench] Upgrade aborted: not enough '{RequiredMaterialId}'.");
+            return false;
+        }
+
+        weapon.UpgradeLevel++;
+        GD.Print($"[UpgradeBench] Upgraded weapon to level {weapon.UpgradeLevel}.");
+        return true;
     }
 }
 
 /// <summary>
-/// Event published on EventBus when an upgrade is executed at a bench.
+/// Event published on EventBus when an upgrade is attempted at a bench.
 /// </summary>
-public record struct UpgradeAttemptedEvent(string BenchName, bool success);
+public record struct UpgradeAttemptedEvent(string BenchName, bool Success);

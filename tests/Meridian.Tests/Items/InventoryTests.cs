@@ -70,8 +70,8 @@ public class InventoryTests : IDisposable
     [Fact]
     public void InventoryTransaction_ShouldRollbackOnFailure()
     {
-        var inventory = new InventoryModel { MaxWeight = 10.0f };
-        
+        var inventory = new InventoryModel { MaxWeight = 10.0f, AllowUnregisteredItems = true };
+
         // Setup initial inventory count
         inventory.AddItem(new ItemInstance("metal_scrap", 5));
         Assert.Equal(5, inventory.GetItemCount("metal_scrap"));
@@ -90,5 +90,69 @@ public class InventoryTests : IDisposable
         // Inventory should remain completely unchanged (rollback of deduct)
         Assert.Equal(5, inventory.GetItemCount("metal_scrap"));
         Assert.Equal(0, inventory.GetItemCount("heavy_item"));
+    }
+
+    [Fact]
+    public void Transaction_Rollback_ShouldPreserveUniqueItemPayload()
+    {
+        // M17: a deducted unique item must be restored as its real instance (payload intact),
+        // not recreated as a plain ItemInstance.
+        var inventory = new InventoryModel { MaxWeight = 100.0f };
+        inventory.RegisterDefinition(new BasicItemDefinition("rifle", maxStack: 1, weight: 3.0f));
+        inventory.RegisterDefinition(new BasicItemDefinition("heavy_item", 99, 200.0f));
+
+        var rifle = new WeaponInstance("rifle", "rifle_def") { CurrentAmmo = 30, UpgradeLevel = 4 };
+        rifle.InstalledModIds.Add("suppressor");
+        Assert.True(inventory.AddItem(rifle));
+
+        var transaction = new InventoryTransaction();
+        transaction.DeductItem(inventory, "rifle", 1);
+        transaction.AddItem(inventory, new ItemInstance("heavy_item", 1)); // forces failure -> rollback
+        Assert.False(transaction.Execute());
+
+        // The exact rifle instance (with ammo, upgrade level, mods) is back.
+        var restored = Assert.IsType<WeaponInstance>(Assert.Single(inventory.Items));
+        Assert.Same(rifle, restored);
+        Assert.Equal(30, restored.CurrentAmmo);
+        Assert.Equal(4, restored.UpgradeLevel);
+        Assert.Contains("suppressor", restored.InstalledModIds);
+    }
+
+    [Fact]
+    public void AddItem_ShouldSplitAcrossStacksAtMaxStackBoundary()
+    {
+        var inventory = new InventoryModel { MaxWeight = 1000f };
+        inventory.RegisterDefinition(new BasicItemDefinition("bullet", maxStack: 30, weight: 0.0f));
+
+        Assert.True(inventory.AddItem(new ItemInstance("bullet", 25)));
+        Assert.True(inventory.AddItem(new ItemInstance("bullet", 20))); // 25 + 20 = 45 => 30 + 15
+
+        Assert.Equal(45, inventory.GetItemCount("bullet"));
+        Assert.Equal(2, inventory.Items.Count); // split into two stacks at the 30 boundary
+    }
+
+    [Fact]
+    public void RemoveItem_ShouldSpanMultipleStacks()
+    {
+        var inventory = new InventoryModel { MaxWeight = 1000f };
+        inventory.RegisterDefinition(new BasicItemDefinition("bullet", maxStack: 30, weight: 0.0f));
+        inventory.AddItem(new ItemInstance("bullet", 30));
+        inventory.AddItem(new ItemInstance("bullet", 30));
+
+        Assert.True(inventory.RemoveItem("bullet", 45)); // drains one full stack + part of another
+        Assert.Equal(15, inventory.GetItemCount("bullet"));
+    }
+
+    [Fact]
+    public void AddItem_UnregisteredDefinition_FailsUnlessAllowed()
+    {
+        // L7: production must not silently stub unknown item definitions.
+        var strict = new InventoryModel();
+        Assert.False(strict.AddItem(new ItemInstance("mystery", 1)));
+        Assert.Equal(0, strict.GetItemCount("mystery"));
+
+        var lenient = new InventoryModel { AllowUnregisteredItems = true };
+        Assert.True(lenient.AddItem(new ItemInstance("mystery", 1)));
+        Assert.Equal(1, lenient.GetItemCount("mystery"));
     }
 }

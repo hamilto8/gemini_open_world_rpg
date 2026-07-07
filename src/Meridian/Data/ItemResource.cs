@@ -22,8 +22,27 @@ public partial class ItemResource : Resource, IItemDefinition
     
     [Export] public Godot.Collections.Array<ItemBehaviorResource> Behaviors { get; set; } = new();
 
+    private List<object>? _behaviorsCache;
+
     string IItemDefinition.Id => Id;
     int IItemDefinition.MaxStack => MaxStack;
     float IItemDefinition.Weight => Weight;
-    System.Collections.Generic.IReadOnlyList<object> IItemDefinition.Behaviors => System.Linq.Enumerable.ToList(System.Linq.Enumerable.Cast<object>(Behaviors));
+
+    // Cache the object-typed projection so repeated domain reads don't allocate a new list each time.
+    // Rebuild only when the underlying export count changes (covers inspector edits).
+    IReadOnlyList<object> IItemDefinition.Behaviors
+    {
+        get
+        {
+            if (_behaviorsCache == null || _behaviorsCache.Count != Behaviors.Count)
+            {
+                _behaviorsCache = new List<object>(Behaviors.Count);
+                foreach (var behavior in Behaviors)
+                {
+                    _behaviorsCache.Add(behavior);
+                }
+            }
+            return _behaviorsCache;
+        }
+    }
 }

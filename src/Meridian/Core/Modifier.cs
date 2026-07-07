@@ -3,14 +3,21 @@ using System;
 namespace Meridian.Core;
 
 /// <summary>
-/// Predefined mathematical operations for stat modification.
-/// Order of operations: Override > Multiply > PercentAdd > Add.
+/// Predefined mathematical operations for stat modification, applied by
+/// <see cref="ModifierSystem.Calculate"/> in the order <c>Add -> PercentAdd -> Multiply -> Override</c>.
 /// </summary>
 public enum ModifierOp
 {
+    /// <summary>Flat addition to the base value.</summary>
     Add,
+
+    /// <summary>Additive percentage as a fraction (0.15 = +15%); summed then applied once.</summary>
     PercentAdd,
+
+    /// <summary>Multiplicative factor applied after percent adds.</summary>
     Multiply,
+
+    /// <summary>Replaces the computed result entirely (last override wins).</summary>
     Override
 }
 

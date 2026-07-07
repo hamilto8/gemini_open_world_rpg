@@ -18,8 +18,10 @@ public partial class GameDirectorNode : Node, IGameDirector
     public override void _Ready()
     {
         GD.Print("[GameDirector] Booting...");
-        // Auto transition from Boot to MainMenu in Phase 0
-        CallDeferred(nameof(TransitionTo), (int)GameState.MainMenu, "res://scenes/game/Game.tscn");
+        // Game.tscn is already the running main scene, so just advance the state machine to MainMenu
+        // — no redundant scene reload (H6). A typed deferred Callable avoids fragile Variant/overload
+        // marshalling through CallDeferred(string, ...).
+        Callable.From(() => TransitionTo(GameState.MainMenu)).CallDeferred();
     }
 
     public void TransitionTo(GameState newState, string? targetScenePath = null)
@@ -28,20 +30,20 @@ public partial class GameDirectorNode : Node, IGameDirector
         CurrentState = newState;
 
         // Publish event to EventBus so HUD/UI can react
-        var eventBus = Services.Get<IEventBus>();
-        eventBus.Publish(new GameStateChangedEvent(CurrentState));
-
-        if (!string.IsNullOrEmpty(targetScenePath) && CurrentState != GameState.Boot)
+        if (Services.TryGet<IEventBus>(out var eventBus) && eventBus != null)
         {
-            // Perform Godot scene switch
-            GetTree().ChangeSceneToFile(targetScenePath);
+            eventBus.Publish(new GameStateChangedEvent(CurrentState));
         }
-    }
 
-    // Overload for CallDeferred which doesn't support enum casting directly
-    private void TransitionTo(int stateInt, string? targetScenePath)
-    {
-        TransitionTo((GameState)stateInt, targetScenePath);
+        // Only switch scenes when a target is given and it isn't already the running scene.
+        if (!string.IsNullOrEmpty(targetScenePath) && newState != GameState.Boot)
+        {
+            string? currentScenePath = GetTree().CurrentScene?.SceneFilePath;
+            if (currentScenePath != targetScenePath)
+            {
+                GetTree().ChangeSceneToFile(targetScenePath);
+            }
+        }
     }
 }
 

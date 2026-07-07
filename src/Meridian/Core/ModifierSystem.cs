@@ -11,8 +11,13 @@ namespace Meridian.Core;
 public static class ModifierSystem
 {
     /// <summary>
-    /// Calculates the modified value of a stat based on a list of active modifiers.
-    /// Order of operations: Base -> Add -> PercentAdd -> Multiply -> Override.
+    /// Calculates the modified value of a stat from a base value and its active modifiers.
+    /// Application order: <c>Base -> Add -> PercentAdd -> Multiply -> Override</c>.
+    /// <para>
+    /// <see cref="ModifierOp.PercentAdd"/> values are <b>fractions</b>: <c>0.15</c> means +15%,
+    /// <c>-0.15</c> means −15%. This is the single project-wide convention — every call site
+    /// (perks, gear, weather) authors percentages as fractions.
+    /// </para>
     /// </summary>
     public static float Calculate(float baseValue, IEnumerable<Modifier> modifiers)
     {
@@ -47,7 +52,7 @@ public static class ModifierSystem
         }
 
         float result = baseValue + adds;
-        result *= (1.0f + (percentAdds / 100.0f));
+        result *= 1.0f + percentAdds; // percentAdds is a summed fraction (0.15 = +15%)
         result *= multiplies;
 
         return result;

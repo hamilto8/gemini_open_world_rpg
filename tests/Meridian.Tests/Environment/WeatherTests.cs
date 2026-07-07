@@ -38,11 +38,11 @@ public class WeatherTests
         stats.SetBaseStat("move_speed", 10.0f);
         Assert.Equal(10.0f, stats.GetStat("move_speed"));
 
-        // Simulate rain speed reduction (-15% = -1.5)
+        // Rain applies a -15% slow as a percent modifier (fraction convention, matches WeatherSystemNode).
         var rainModifier = new Modifier(
             targetStatId: "move_speed",
-            operation: ModifierOp.Add,
-            value: -1.5f,
+            operation: ModifierOp.PercentAdd,
+            value: -0.15f,
             sourceTag: "weather_rain"
         );
 

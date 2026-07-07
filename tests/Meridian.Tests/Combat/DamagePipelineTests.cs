@@ -1,37 +1,41 @@
-using System;
 using Xunit;
-using Meridian.Core;
 using Meridian.Combat;
 
 namespace Meridian.Tests.Combat;
 
+/// <summary>
+/// Exercises the real <see cref="DamagePipeline"/> (previously this asserted inline arithmetic that
+/// never touched production code — T1).
+/// </summary>
 public class DamagePipelineTests
 {
-    private class MockDamageableTarget : IDamageable
+    [Fact]
+    public void Mitigate_ShouldApplyHeadMultiplierThenArmor()
     {
-        public DamageInfo LastReceivedDamage { get; private set; }
-        public int CallCount { get; private set; }
-
-        public void ApplyDamage(DamageInfo info)
-        {
-            LastReceivedDamage = info;
-            CallCount++;
-        }
+        // 50 * 2.0 (head) - 10 armor = 90
+        Assert.Equal(90f, DamagePipeline.Mitigate(50f, HitZone.Head, 10f), 3);
     }
 
     [Fact]
-    public void MitigationPipeline_ShouldApplyMultiplierAndArmorCorrectly()
+    public void Mitigate_ShouldApplyLimbReduction()
     {
-        // Simple manual calculation verification
-        float baseDamage = 50f;
-        float armor = 10f;
-        
-        // 1. Headshot multiplier = 2.0x
-        float rawDamage = baseDamage * 2.0f; // 100f
-        
-        // 2. Armor reduction
-        float finalDamage = Math.Max(1.0f, rawDamage - armor); // 90f
+        // 50 * 0.5 (limb) - 5 armor = 20
+        Assert.Equal(20f, DamagePipeline.Mitigate(50f, HitZone.Limbs, 5f), 3);
+    }
 
-        Assert.Equal(90f, finalDamage);
+    [Fact]
+    public void Mitigate_ShouldClampToMinimumOfOne_WhenArmorExceedsRaw()
+    {
+        Assert.Equal(1f, DamagePipeline.Mitigate(5f, HitZone.Body, 999f), 3);
+    }
+
+    [Theory]
+    [InlineData(HitZone.Body, 1.0f)]
+    [InlineData(HitZone.Head, 2.0f)]
+    [InlineData(HitZone.Limbs, 0.5f)]
+    [InlineData(HitZone.Weakpoint, 3.0f)]
+    public void ZoneMultiplier_ShouldMatchDesign(HitZone zone, float expected)
+    {
+        Assert.Equal(expected, DamagePipeline.ZoneMultiplier(zone), 3);
     }
 }
