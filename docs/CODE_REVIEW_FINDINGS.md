@@ -307,3 +307,58 @@ Fixes for the findings above were applied. Build is clean (`dotnet build` — 0 
 **Low:** L1 (`IWorldStreamer`/`IMusicManager`), L2 (unregister symmetry on Systems-scoped nodes), L4 (`WorldClock` owns time scale), L5 (`DummyTarget` uses an owned `Tween`), L6 (`InputFrame` doc corrected; `LookX/Y` populated), L7 (auto-stub gated behind `AllowUnregisteredItems`), L8/L9 (dialogue-action + audio stubs marked TODO), L10 (`PerfHud` throttled to ~4 Hz), L11 (HUD driven by `StatChanged`), L12 (unused usings/fields/params removed; `ItemResource.Behaviors` cached), L13 (`.uid` files confirmed committable, not git-ignored). L3 left as-is — an explicit "consider" micro-optimization, not a defect.
 
 **Tests:** T1 (domain extraction: `VehicleMotorModel`, `DamagePipeline`, `WeaponRuntime`, `StreamingRings`; tautology tests rewritten), T2 (bug-pinning tests updated deliberately; JSON round-trip with a non-substring id added), T3 (parallelization disabled — shared static locator race), T4 (coverage added across StatBlock, EventBus reentrancy, WorldClock, QuestManager, SaveService `.bak`, streaming rings, locomotion boundaries, inventory stack split), T5 (dead arrangements removed, precision overloads).
+
+---
+
+# Verification Review (addendum, 2026-07-07)
+
+Independent re-review of the codebase after the Resolution Log fixes landed (`0bdf692`). Method: rebuilt (`dotnet build` — 0 warnings/errors), reran the suite (98/98 passing), and read every changed production and test file, verifying each claimed fix against the code rather than the log.
+
+## Verdict on the fix pass
+
+**All Resolution Log claims check out.** Spot-verified in code, not just by diff: C1 (ServicesNode deleted from autoloads and repo), C2 (`WeatherSystemNode : IWeatherSystem`, registered/unregistered symmetrically, id→profile index), C3/C4 (Vehicle context allows movement actions; `VehicleMotorModel` uses forward-positive throttle, and `VehicleTests.NegativeThrottle_ShouldNotDriveForward` pins the old bug), C5 (a project-wide grep shows every `Subscribe<` call now stores its token; `NpcLifeController` disposes in `_ExitTree`), H1/H2 (`IHitZoneResolver` on the target + shooter RID excluded), H3 (`StatBlock.GetStat` runs the pipeline for unregistered bases; pinned by `StatBlockTests.Modifier_OnUnregisteredStat_StillApplies`), H4/H5 (`ISaveParticipant.StateType` drives source-generated (de)serialization; corrupt-primary → `.bak` fallback; per-participant restore with logging; unknown ids surfaced), H6 (typed `Callable.From` deferred boot, no redundant scene reload), H7 (`StreamingRings` hysteresis with real boundary tests, dictionary cell index, per-frame instantiation cap, `ProcessMode.Disabled` on Visual, load-abandon), H8 (fraction convention consistent across `ModifierSystem`, perks, weather, and tests — the previously contradictory tests now agree), and the M/L/T tiers as described. The test-suite rewrite is genuine: the former tautologies now exercise `WeaponRuntime`/`VehicleMotorModel`/`DamagePipeline`/`StreamingRings`, quest state round-trips through the real JSON context, and parallelization is disabled with a rationale comment.
+
+One correction to the original review: **M1 was partially wrong** — `Directory.Build.props` (with `Nullable`, `LangVersion latest`, targeted `WarningsAsErrors`) has existed since the first commit; only the `AllowUnsafeBlocks` removal was a real fix. Noted for the record.
+
+## New findings
+
+The fixes repaired the systems' internals; what remains broken is the *wiring into the running game*. Both Criticals below predate the fix commit and were missed by the two earlier review rounds as well — unit tests can't see them because they live in `project.godot` and scene composition.
+
+### V1 (Critical). The InputMap defines no gameplay actions
+- **File:** [project.godot](project.godot) `[input]` section
+- The only defined action is `console_toggle`. Every action the game polls — `move_forward`, `move_backward`, `move_left`, `move_right`, `jump`, `sprint`, `crouch`, `aim`, `fire`, `interact`, `brake` (in `PlayerControllerNode.CompileInputFrame`) — does not exist in Godot's InputMap. At runtime each `Input.IsActionPressed(...)` call pushes an "InputMap action doesn't exist" error (every physics frame) and returns false: **the player cannot move, and the vehicle cannot be driven, regardless of all the C3/C4 fixes**. No code registers actions via `InputMap.AddAction` either.
+- **Fix direction:** author the full action set with key/mouse/gamepad bindings in `project.godot` (WASD, Space=jump, Shift=sprint, Ctrl=crouch, RMB=aim, LMB=fire, E=interact, plus a vehicle brake key), or register them at boot from a data-driven bindings resource (doc §17's rebinding requirement suggests the latter eventually). Note `look` is only an InputContextService concept (checked via `IsActionAllowed` alone), so it does not need an InputMap entry.
+
+### V2 (Critical). `PlayerControllerNode` is never instantiated
+- **Files:** [project.godot](project.godot) (not an autoload), [Game.tscn](scenes/game/Game.tscn) (not a node), no `new PlayerControllerNode` anywhere
+- The possession chain's head does not exist in the running game: `IPlayerController` is never registered, so `PlayerAvatar.AutoPossess` no-ops, no `InputFrame` is ever compiled, `IInventoryProvider` is absent (UpgradeBench can't transact), the `PlayerState` save participant never registers (player position/health/stamina are silently absent from saves), and `WeatherSystemNode`'s player-modifier push finds no player. Doc §5.1 places the PlayerController "persistent, under Systems" — the persistent Systems node itself (ADR-0010's stated migration target) also doesn't exist yet.
+- **Fix direction:** add a `Systems` node to `Game.tscn` with `PlayerControllerNode` under it (preferred — matches doc §3.4 and ADR-0010's migration plan), or register it as an autoload; then verify possession, movement, save round-trip, and vehicle boarding by actually running the game.
+
+### V3 (Medium). Weather modifier can strand on a stale StatBlock across possession changes
+- **File:** [WeatherSystemNode.cs](src/Meridian/Environment/WeatherSystemNode.cs) (`ApplyWeatherModifiers`/`RemoveWeatherModifiers`)
+- Both apply and remove resolve the *currently possessed* entity at call time. Sequence: weather applies a `move_speed` modifier to the on-foot avatar → player boards a vehicle (possessed entity is now the vehicle) → weather changes → `RemoveWeatherModifiers` resolves the vehicle, finds no `StatBlock` child, removes nothing, then sets `_activeWeatherModifier = null` — the old modifier is now permanently stuck on the avatar's StatBlock (only a `RemoveModifierBySource` sweep could clear it). Symmetrically, a transition while nothing is possessed (e.g. during restore, before `AutoPossess`) applies nothing, and nothing reapplies on possession change.
+- **Fix direction:** remember the actual `StatBlockNode` the modifier was pushed to and remove from that stored reference; publish/subscribe a possession-changed event to migrate or reapply weather modifiers.
+
+### V4 (Medium). Combat and upgrade flows are unreachable in-game (fixed internals, no wiring)
+- **Files:** [PlayerAvatar.cs](scenes/player/PlayerAvatar.cs), [PlayerControllerNode.cs](src/Meridian/Core/PlayerControllerNode.cs) (`EquippedWeapon`), scene files
+- `InputFrame.FirePressed` is compiled but no consumer reads it — `PlayerAvatar` has no `WeaponController`/`EquipmentHolder`, no scene instantiates a weapon, and `PlayerControllerNode.EquippedWeapon` is never assigned. Consequently `UpgradeBench.CanInteract` is always false in-game, and the H1/H2/M16 fixes are exercisable only from tests. Acknowledged scaffolding, but track it: the doc's §5.2 avatar composition (EquipmentHolder) and §6.3 weapon runtime are not yet reachable from play.
+
+### V5 (Low). GameDirector's state machine never reaches `Playing`
+- **File:** [GameDirectorNode.cs](src/Meridian/Core/GameDirectorNode.cs)
+- Boot transitions to `MainMenu` and stops; gameplay runs while `CurrentState == MainMenu`. Doc §3.4 specifies Boot → MainMenu → Loading → Playing (→ Paused). Harmless today, but anything gating behavior on `GameState.Playing` will silently never fire.
+
+### V6 (Low). ContentValidator fails against its own repository and is never invoked
+- **File:** [ContentValidator.cs](src/Meridian/Core/Validation/ContentValidator.cs)
+- The `.tres` parsing (dangling `ext_resource` paths, duplicate ids) is now real, but `ValidateDirectoryStructure` requires `addons/`, `shaders/`, and `localization/` folders that don't exist in this repo — run against the project root, it reports errors by construction. It also has no caller outside tests (no editor tool, CI step, or boot check).
+- **Fix direction:** create the missing folders (with `.gitkeep`) or trim the required list to what the project actually mandates, and wire the validator into CI or an editor menu action (doc §19.10).
+
+### V7 (Low). Residual placeholders and micro-allocations
+- [WorldClockNode.cs](src/Meridian/Environment/WorldClockNode.cs) `CaptureState` still hardcodes `WeatherElapsed = 0` / `ForecastSeed = 1234` (restore ignores both — harmless until a forecast system exists).
+- [WorldStreamerNode.cs](src/Meridian/World/WorldStreamerNode.cs) allocates a `new StreamingRings(...)` every `_Process` frame (cache it and rebuild only when the exported radii change), and the instantiation budget is count-based (`MaxCellInstancesPerFrame`) rather than the doc's millisecond budget (§4.3) — fine at current scale, revisit when cells get heavy.
+- [VehicleAvatar.cs](src/Meridian/Vehicles/VehicleAvatar.cs) `Unboard` early-returns if `_boardedAvatar` isn't `IPossessable`, leaving the player permanently stuck in the vehicle (unreachable with the current avatar, but a guard that strands the player is the wrong failure mode); boarding pushes the Vehicle input context inside `Interact` while a direct `Possess()` call would bypass it — the context push/pop would sit more safely in `OnPossessed`/`OnReleased`.
+
+## Suggested order
+
+1. V1 + V2 together — the "make the game actually playable" pair; verify by running the game and walking around, then boarding and driving the vehicle.
+2. V3 (weather/possession lifecycle) once possession actually occurs in-game.
+3. V4 wiring when combat becomes the active phase; V5–V7 opportunistically.
