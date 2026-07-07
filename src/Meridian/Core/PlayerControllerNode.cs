@@ -36,6 +36,9 @@ public partial class PlayerControllerNode : Node, IPlayerController, IInventoryP
 
     public override void _Ready()
     {
+        // Guarantee the mouse-look callback fires (camera look is read in _UnhandledInput).
+        SetProcessUnhandledInput(true);
+
         if (Services.TryGet<ISaveService>(out var saveService) && saveService != null)
         {
             saveService.RegisterParticipant(this);
@@ -154,11 +157,16 @@ public partial class PlayerControllerNode : Node, IPlayerController, IInventoryP
         frame.LookY = _pendingLook.Y;
         _pendingLook = Vector2.Zero;
 
-        // Standard actions allowed checks via input context mapping (Section 17.1)
-        if (inputService.IsActionAllowed("move_forward") && Godot.Input.IsActionPressed("move_forward")) frame.MoveY += 1.0f;
-        if (inputService.IsActionAllowed("move_backward") && Godot.Input.IsActionPressed("move_backward")) frame.MoveY -= 1.0f;
-        if (inputService.IsActionAllowed("move_left") && Godot.Input.IsActionPressed("move_left")) frame.MoveX -= 1.0f;
-        if (inputService.IsActionAllowed("move_right") && Godot.Input.IsActionPressed("move_right")) frame.MoveX += 1.0f;
+        // Movement is analog (GetActionStrength) so the gamepad left stick works alongside WASD keys.
+        frame.MoveY = Axis(inputService, "move_forward", "move_backward");
+        frame.MoveX = Axis(inputService, "move_right", "move_left");
+
+        // Right-stick camera look (analog rate; mouse-look above is a pixel delta).
+        if (inputService.IsActionAllowed("look"))
+        {
+            frame.LookStickX = Axis(inputService, "look_right", "look_left");
+            frame.LookStickY = Axis(inputService, "look_down", "look_up");
+        }
 
         // Mouse look/aim delta tracking
         if (inputService.IsActionAllowed("aim"))
@@ -197,6 +205,17 @@ public partial class PlayerControllerNode : Node, IPlayerController, IInventoryP
         }
 
         return frame;
+    }
+
+    /// <summary>
+    /// Analog axis value from a positive/negative action pair, gated by the active input context.
+    /// Returns 1.0 for a pressed key or the analog magnitude for a gamepad stick.
+    /// </summary>
+    private static float Axis(IInputContextService inputService, string positive, string negative)
+    {
+        float pos = inputService.IsActionAllowed(positive) ? Godot.Input.GetActionStrength(positive) : 0f;
+        float neg = inputService.IsActionAllowed(negative) ? Godot.Input.GetActionStrength(negative) : 0f;
+        return pos - neg;
     }
 
     public object CaptureState()

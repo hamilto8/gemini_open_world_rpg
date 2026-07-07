@@ -18,6 +18,9 @@ public partial class PerfHud : Control
 
     public override void _Ready()
     {
+        // Read-only telemetry overlay must never capture the mouse (would block camera look).
+        MouseFilter = MouseFilterEnum.Ignore;
+
         // Programmatically build UI elements if they are not bound via TSCN
         _fpsLabel = GetNodeOrNull<Label>("FpsLabel");
         _memoryLabel = GetNodeOrNull<Label>("MemoryLabel");

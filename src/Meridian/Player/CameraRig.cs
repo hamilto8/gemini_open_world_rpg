@@ -50,10 +50,14 @@ public partial class CameraRig : SpringArm3D
         var targetMode = (isAiming ? AimMode : ExploreMode) ?? ExploreMode;
         if (targetMode == null) return;
 
-        // Apply look from the (context-gated) input frame, scaled by the mode's data-driven sensitivity.
-        float sensitivity = targetMode.MouseSensitivity;
-        _yaw -= input.LookX * sensitivity;
-        _pitch = Mathf.Clamp(_pitch - input.LookY * sensitivity, -Mathf.Pi / 3.0f, Mathf.Pi / 4.0f);
+        // Apply look from the (context-gated) input frame. Mouse contributes a per-frame pixel delta;
+        // the gamepad right stick contributes a rate (radians/sec) scaled by delta.
+        _yaw -= input.LookX * targetMode.MouseSensitivity;
+        _yaw -= input.LookStickX * targetMode.StickLookSensitivity * (float)delta;
+
+        float pitchDelta = input.LookY * targetMode.MouseSensitivity
+                         + input.LookStickY * targetMode.StickLookSensitivity * (float)delta;
+        _pitch = Mathf.Clamp(_pitch - pitchDelta, -Mathf.Pi / 3.0f, Mathf.Pi / 4.0f);
 
         Rotation = new Vector3(_pitch, _yaw, 0);
 

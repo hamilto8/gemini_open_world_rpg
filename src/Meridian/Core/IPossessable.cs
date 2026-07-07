@@ -12,8 +12,15 @@ public struct InputFrame
 {
     public float MoveX;
     public float MoveY;
+
+    /// <summary>Mouse-look delta in pixels this frame (device: keyboard/mouse).</summary>
     public float LookX;
     public float LookY;
+
+    /// <summary>Right-stick look, normalized -1..1 (device: gamepad). Applied as a rate, not a delta.</summary>
+    public float LookStickX;
+    public float LookStickY;
+
     public bool JumpPressed;
     public bool SprintHeld;
     public bool CrouchHeld;

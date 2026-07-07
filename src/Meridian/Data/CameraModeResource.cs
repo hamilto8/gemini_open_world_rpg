@@ -17,4 +17,7 @@ public partial class CameraModeResource : Resource
 
     /// <summary>Look sensitivity (radians per pixel of mouse motion) for this mode — data, not hardcoded.</summary>
     [Export] public float MouseSensitivity { get; set; } = 0.003f;
+
+    /// <summary>Gamepad right-stick look speed in radians per second at full deflection.</summary>
+    [Export] public float StickLookSensitivity { get; set; } = 2.5f;
 }
