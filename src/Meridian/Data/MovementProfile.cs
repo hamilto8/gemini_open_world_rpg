@@ -9,9 +9,10 @@ namespace Meridian.Data;
 [GlobalClass]
 public partial class MovementProfile : Resource
 {
+    // Two gaits: WalkSpeed is the analog-stick ceiling; RunSpeed is reached only with the run modifier
+    // (R3 on gamepad / Shift on keyboard). CrouchSpeed applies while crouched.
     [Export] public float WalkSpeed { get; set; } = 2.5f;
     [Export] public float RunSpeed { get; set; } = 5.0f;
-    [Export] public float SprintSpeed { get; set; } = 8.0f;
     [Export] public float CrouchSpeed { get; set; } = 1.5f;
     [Export] public float Acceleration { get; set; } = 30.0f;
     [Export] public float Friction { get; set; } = 25.0f;
@@ -24,12 +25,6 @@ public partial class MovementProfile : Resource
     [Export] public float StaminaRegenPerSecond { get; set; } = 15.0f;
     [Export] public float AimSpeedMultiplier { get; set; } = 0.6f;
 
-    /// <summary>Baseline move_speed stat the RunSpeed etc. are authored against; the StatBlock ratio scales off this.</summary>
+    /// <summary>Baseline move_speed stat the WalkSpeed/RunSpeed are authored against; the StatBlock ratio scales off this.</summary>
     [Export] public float BaseMoveSpeed { get; set; } = 5.0f;
-
-    /// <summary>
-    /// Analog-stick tilt (0..1) at which movement reaches <see cref="WalkSpeed"/>; beyond it, speed ramps
-    /// WalkSpeed→RunSpeed up to full tilt. Keyboard input is always full tilt, so it jogs at RunSpeed.
-    /// </summary>
-    [Export(PropertyHint.Range, "0.1,1.0,0.05")] public float WalkTiltThreshold { get; set; } = 0.5f;
 }

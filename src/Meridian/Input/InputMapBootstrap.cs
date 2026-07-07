@@ -48,8 +48,8 @@ public static class InputMapBootstrap
         // Buttons — Xbox layout.
         AddKey("jump", Key.Space);
         AddJoyButton("jump", JoyButton.A);
-        AddKey("sprint", Key.Shift);
-        AddJoyButton("sprint", JoyButton.LeftStick);   // click left stick (L3)
+        AddKey("sprint", Key.Shift);                    // run modifier on keyboard
+        AddJoyButton("sprint", JoyButton.RightStick);   // run = click right stick (R3) on the gamepad
         AddKey("crouch", Key.Ctrl);
         AddJoyButton("crouch", JoyButton.B);
         AddKey("interact", Key.E);

@@ -6,7 +6,6 @@
 script = ExtResource("1_script")
 WalkSpeed = 2.5
 RunSpeed = 5.0
-SprintSpeed = 8.0
 CrouchSpeed = 1.5
 Acceleration = 30.0
 Friction = 25.0

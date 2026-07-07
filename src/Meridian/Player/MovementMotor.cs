@@ -109,32 +109,17 @@ public partial class MovementMotor : Node
 
         inputMagnitude = Mathf.Clamp(inputMagnitude, 0f, 1f);
 
-        float baseSpeed;
-        if (state == LocomotionState.Crouch)
+        // Two gaits: the analog stick alone tops out at a walk (full tilt = WalkSpeed). Running is a
+        // deliberate modifier — the run button (R3 on gamepad / Shift on keyboard) drives the Sprint
+        // state, raising the ceiling to RunSpeed. Speed within a gait is proportional to stick tilt;
+        // keyboard is always full tilt.
+        float gaitSpeed = state switch
         {
-            baseSpeed = Profile.CrouchSpeed * inputMagnitude;
-        }
-        else if (state == LocomotionState.Sprint)
-        {
-            // Sprint ramps run -> sprint across the upper stick range (full tilt = full sprint).
-            baseSpeed = Mathf.Lerp(Profile.RunSpeed, Profile.SprintSpeed, inputMagnitude);
-        }
-        else
-        {
-            // Analog walk -> run curve: a gentle stick reaches WalkSpeed at WalkTiltThreshold, then
-            // ramps WalkSpeed -> RunSpeed up to full tilt. This is continuous (no walk/run pop) and
-            // keeps both speeds meaningful; keyboard (magnitude 1.0) always jogs at RunSpeed.
-            float walkTilt = Mathf.Clamp(Profile.WalkTiltThreshold, 0.05f, 1.0f);
-            if (inputMagnitude <= walkTilt)
-            {
-                baseSpeed = Profile.WalkSpeed * (inputMagnitude / walkTilt);
-            }
-            else
-            {
-                float t = (inputMagnitude - walkTilt) / (1.0f - walkTilt);
-                baseSpeed = Mathf.Lerp(Profile.WalkSpeed, Profile.RunSpeed, t);
-            }
-        }
+            LocomotionState.Crouch => Profile.CrouchSpeed,
+            LocomotionState.Sprint => Profile.RunSpeed,
+            _ => Profile.WalkSpeed,
+        };
+        float baseSpeed = gaitSpeed * inputMagnitude;
 
         // Aiming reduces movement speed (Section 5.3 aiming speed caps)
         if (isAiming)
