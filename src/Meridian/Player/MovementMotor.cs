@@ -28,9 +28,11 @@ public partial class MovementMotor : Node
     }
 
     /// <summary>
-    /// Processes physical locomotion velocity integration.
+    /// Processes physical locomotion velocity integration. <paramref name="cameraYaw"/> is the
+    /// horizontal look angle; movement input is interpreted relative to it so the player travels in
+    /// the direction the camera is pointing (standard third-person camera-relative movement).
     /// </summary>
-    public void Move(InputFrame input, LocomotionState state, bool isAiming, double delta)
+    public void Move(InputFrame input, LocomotionState state, bool isAiming, float cameraYaw, double delta)
     {
         if (_body == null) return;
         if (Profile == null) return;
@@ -68,8 +70,10 @@ public partial class MovementMotor : Node
 
         if (inputMagnitude > 0.001f)
         {
+            // Rotate the input by the camera yaw (not the body's facing): forward = camera-forward,
+            // right = camera-right, projected onto the ground plane.
             Vector3 localDir = new Vector3(input.MoveX, 0, -input.MoveY).Normalized();
-            Vector3 direction = (_body.GlobalTransform.Basis * localDir).Normalized();
+            Vector3 direction = (new Basis(Vector3.Up, cameraYaw) * localDir).Normalized();
             Vector2 targetHorizontal = new Vector2(direction.X, direction.Z) * speed;
             horizontalVelocity = horizontalVelocity.Lerp(targetHorizontal, Profile.Acceleration * (float)delta);
         }

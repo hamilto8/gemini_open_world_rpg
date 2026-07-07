@@ -19,6 +19,10 @@ public partial class CameraRig : SpringArm3D
     private float _yaw = 0f;
     private float _pitch = 0f;
 
+    /// <summary>Horizontal look angle (radians). Movement is computed relative to this so the player
+    /// travels where the camera points.</summary>
+    public float Yaw => _yaw;
+
     private float _currentSpringLength;
     private float _currentFov;
     private float _currentShoulderOffset;
@@ -73,11 +77,9 @@ public partial class CameraRig : SpringArm3D
         Position = targetMode.PivotOffset;
         _camera.Position = new Vector3(_currentShoulderOffset, 0, 0);
 
-        // Turn the body to face the camera yaw when aiming or moving (movement read from the frame).
-        bool moving = Mathf.Abs(input.MoveX) > 0.01f || Mathf.Abs(input.MoveY) > 0.01f;
-        if (isAiming || moving)
-        {
-            _target.Rotation = new Vector3(_target.Rotation.X, _yaw, _target.Rotation.Z);
-        }
+        // The rig is a child of the (never-rotated) body, so setting its local rotation here makes its
+        // GLOBAL yaw equal to _yaw — the camera orbits freely and the body no longer fights it. Movement
+        // is made camera-relative in MovementMotor via the Yaw property, so the player travels where the
+        // camera points regardless of body facing.
     }
 }

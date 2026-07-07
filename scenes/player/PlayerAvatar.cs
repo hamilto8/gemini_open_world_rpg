@@ -100,11 +100,12 @@ public partial class PlayerAvatar : CharacterBody3D, IPossessable
             currentStamina: stamina
         );
 
-        // 2. Perform Movement Motor integration
-        _motor.Move(_lastInput, _hsm.CurrentState, _hsm.Aiming, delta);
-
-        // 3. Update Camera positioning and smoothing (look comes from the input frame)
+        // 2. Update the camera first so movement uses this frame's look direction.
         _cameraRig?.UpdateCamera(_lastInput, _hsm.Aiming, delta);
+
+        // 3. Perform Movement Motor integration, camera-relative (player moves where the camera points).
+        float cameraYaw = _cameraRig?.Yaw ?? GlobalRotation.Y;
+        _motor.Move(_lastInput, _hsm.CurrentState, _hsm.Aiming, cameraYaw, delta);
 
         // 4. HUD stats are driven by StatBlockNode.StatChanged (see _Ready); only the aim reticle,
         //    which mirrors transient HSM state, is pushed here.
