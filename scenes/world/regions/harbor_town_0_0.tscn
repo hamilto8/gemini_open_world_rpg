@@ -4,4 +4,5 @@
 
 [node name="Ground" type="CSGBox3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 128, -0.5, 128)
+use_collision = true
 size = Vector3(256, 1, 256)

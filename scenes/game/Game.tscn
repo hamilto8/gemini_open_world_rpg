@@ -1,4 +1,4 @@
-[gd_scene load_steps=10 format=3 uid="uid://c1y7v3e"]
+[gd_scene load_steps=17 format=3 uid="uid://c1y7v3e"]
 
 [ext_resource type="Script" path="res://scenes/game/Game.cs" id="1_script"]
 [ext_resource type="PackedScene" uid="uid://c6y7v3e" path="res://scenes/player/PlayerAvatar.tscn" id="2_avatar"]
@@ -16,6 +16,26 @@ size = Vector3(1, 2, 1)
 [sub_resource type="BoxMesh" id="BoxMesh_target"]
 size = Vector3(1, 2, 1)
 
+[sub_resource type="StandardMaterial3D" id="Mat_ground"]
+albedo_color = Color(0.28, 0.45, 0.26, 1)
+
+[sub_resource type="StandardMaterial3D" id="Mat_building"]
+albedo_color = Color(0.6, 0.56, 0.5, 1)
+
+[sub_resource type="StandardMaterial3D" id="Mat_accent"]
+albedo_color = Color(0.55, 0.32, 0.22, 1)
+
+[sub_resource type="ProceduralSkyMaterial" id="Sky_mat"]
+
+[sub_resource type="Sky" id="Sky_1"]
+sky_material = SubResource("Sky_mat")
+
+[sub_resource type="Environment" id="Env_1"]
+background_mode = 2
+sky = SubResource("Sky_1")
+ambient_light_source = 3
+tonemap_mode = 2
+
 [node name="Game" type="Node"]
 script = ExtResource("1_script")
 
@@ -31,9 +51,43 @@ script = ExtResource("8_streamer")
 script = ExtResource("9_music")
 
 [node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+environment = SubResource("Env_1")
 
 [node name="DirectionalLight3D" type="DirectionalLight3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 0.707107, 0.707107, 0, -0.707107, 0.707107, 0, 10, 0)
+shadow_enabled = true
+
+[node name="World" type="Node3D" parent="."]
+
+[node name="Ground" type="CSGBox3D" parent="World"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.5, 0)
+use_collision = true
+size = Vector3(400, 1, 400)
+material = SubResource("Mat_ground")
+
+[node name="Building1" type="CSGBox3D" parent="World"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 18, 4, -18)
+use_collision = true
+size = Vector3(10, 8, 10)
+material = SubResource("Mat_building")
+
+[node name="Building2" type="CSGBox3D" parent="World"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -22, 3, -12)
+use_collision = true
+size = Vector3(8, 6, 14)
+material = SubResource("Mat_building")
+
+[node name="Building3" type="CSGBox3D" parent="World"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 26, 5, 24)
+use_collision = true
+size = Vector3(12, 10, 8)
+material = SubResource("Mat_accent")
+
+[node name="Platform" type="CSGBox3D" parent="World"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -14, 1, 18)
+use_collision = true
+size = Vector3(8, 2, 8)
+material = SubResource("Mat_accent")
 
 [node name="PlayerAvatar" parent="." instance=ExtResource("2_avatar")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0)
