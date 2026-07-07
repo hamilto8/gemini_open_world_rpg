@@ -80,18 +80,13 @@ public partial class VehicleAvatar : CharacterBody3D, IPossessable, IInteractabl
         {
             GD.Print($"[VehicleAvatar] Avatar boarding vehicle '{ObjectName}'...");
 
-            // Track boarding avatar, hide it, and possess the vehicle.
+            // Track boarding avatar, hide it, and possess the vehicle. The input-context switch is
+            // handled in OnPossessed/OnReleased so it stays paired with possession.
             _boardedAvatar = avatarNode;
             _boardedAvatar.Visible = false;
             _boardedAvatar.ProcessMode = ProcessModeEnum.Disabled;
 
             pc.Possess(this);
-
-            // Switch input context to Vehicle.
-            if (Services.TryGet<IInputContextService>(out var inputService) && inputService != null)
-            {
-                inputService.PushContext(InputContextType.Vehicle);
-            }
         }
     }
 
@@ -100,6 +95,13 @@ public partial class VehicleAvatar : CharacterBody3D, IPossessable, IInteractabl
         _possessingController = controller;
         _lastPublishedSpeed = float.NaN;
         _lastPublishedFuel = float.NaN;
+
+        // Couple the Vehicle input context to possession so a direct Possess() can't bypass it (V7).
+        if (Services.TryGet<IInputContextService>(out var inputService) && inputService != null)
+        {
+            inputService.PushContext(InputContextType.Vehicle);
+        }
+
         GD.Print("[VehicleAvatar] Possessed by controller.");
     }
 
@@ -107,6 +109,12 @@ public partial class VehicleAvatar : CharacterBody3D, IPossessable, IInteractabl
     {
         _possessingController = null;
         _lastInput = default;
+
+        if (Services.TryGet<IInputContextService>(out var inputService) && inputService != null)
+        {
+            inputService.PopContext();
+        }
+
         GD.Print("[VehicleAvatar] Released by controller.");
     }
 
@@ -180,25 +188,33 @@ public partial class VehicleAvatar : CharacterBody3D, IPossessable, IInteractabl
 
     private void Unboard()
     {
-        if (_possessingController == null || _boardedAvatar is not IPossessable avatarPossessable) return;
+        if (_possessingController == null) return;
 
         GD.Print("[VehicleAvatar] Unboarding avatar...");
 
-        // Restore avatar position next to the vehicle door.
-        _boardedAvatar.GlobalPosition = GlobalPosition + GlobalTransform.Basis * ExitOffset;
-        _boardedAvatar.Visible = true;
-        _boardedAvatar.ProcessMode = ProcessModeEnum.Inherit;
-
         var controller = _possessingController;
+        var avatar = _boardedAvatar;
+        _boardedAvatar = null;
 
-        // Pop input context back to OnFoot.
-        if (Services.TryGet<IInputContextService>(out var inputService) && inputService != null)
+        // Always restore the avatar body, regardless of how possession resolves below.
+        if (avatar != null)
         {
-            inputService.PopContext();
+            avatar.GlobalPosition = GlobalPosition + GlobalTransform.Basis * ExitOffset;
+            avatar.Visible = true;
+            avatar.ProcessMode = ProcessModeEnum.Inherit;
         }
 
-        controller.Possess(avatarPossessable);
-        _boardedAvatar = null;
+        // Hand control back to the avatar. If the tracked body somehow isn't possessable, still release
+        // the vehicle so the player is never permanently stranded (V7). Either path runs OnReleased,
+        // which pops the Vehicle input context.
+        if (avatar is IPossessable avatarPossessable)
+        {
+            controller.Possess(avatarPossessable);
+        }
+        else
+        {
+            controller.Release();
+        }
     }
 }
 

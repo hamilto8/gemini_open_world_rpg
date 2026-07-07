@@ -362,3 +362,17 @@ The fixes repaired the systems' internals; what remains broken is the *wiring in
 1. V1 + V2 together — the "make the game actually playable" pair; verify by running the game and walking around, then boarding and driving the vehicle.
 2. V3 (weather/possession lifecycle) once possession actually occurs in-game.
 3. V4 wiring when combat becomes the active phase; V5–V7 opportunistically.
+
+---
+
+# Resolution Log — Verification findings (addendum, 2026-07-07)
+
+V1–V7 fixed. Build clean (0 warnings/0 errors), 98/98 tests pass. Note: V1–V3 live in `project.godot`/scene composition and Node classes that can't be instantiated headlessly, so they are verified by build + code review rather than new unit tests (adding Node-instantiation tests would reintroduce the T1 tautology anti-pattern).
+
+- **V1 (Critical) — InputMap actions.** Added [`InputMapBootstrap`](src/Meridian/Input/InputMapBootstrap.cs), invoked from `InputContextServiceNode._EnterTree`, which registers the full gameplay action set (WASD move, Space jump, Shift sprint, Ctrl crouch, E interact, R reload, Space brake, LMB fire, RMB aim, Esc menu) via the typed Godot `InputMap` API if not already present. Chosen over hand-editing `project.godot`'s `Object(...)` serialization because that can't be validated without the editor and a malformed entry would break the whole project; code registration is compile-checked and idempotent. `look` intentionally has no InputMap entry (context-only).
+- **V2 (Critical) — PlayerController instantiated.** `Game.tscn` now has a persistent `Systems` node hosting `PlayerController` (`PlayerControllerNode`), plus `WorldStreamer` and `MusicManager` moved out of `[autoload]` into it — closing M2 and implementing ADR-0010's migration. Possession, `IPlayerController`/`IInventoryProvider` registration, the `PlayerState` save participant, and the weather modifier push now have a real owner.
+- **V3 (Medium) — weather modifier lifecycle.** `PlayerControllerNode` publishes a `PossessionChangedEvent` on possess/release; `WeatherSystemNode` remembers the exact `StatBlockNode` it pushed to (removes from that reference, not the currently-possessed one) and subscribes to migrate the modifier across boarding/unboarding. Subscription token disposed in `_ExitTree`.
+- **V4 (Medium) — combat wiring.** Tracked with an explicit TODO in `PlayerAvatar` (no `EquipmentHolder`/`WeaponController` yet; `FirePressed`/`EquippedWeapon` unconsumed). The underlying `WeaponRuntime`/`DamagePipeline` are implemented and tested; only the §5.2/§6.3 scene composition remains, deferred as acknowledged scaffolding.
+- **V5 (Low) — GameState reaches Playing.** `Game.cs` (the gameplay scene) defers a transition to `GameState.Playing`, ordered after the director's boot→MainMenu, giving Boot → MainMenu → Playing.
+- **V6 (Low) — ContentValidator.** The required folders (`addons/`, `shaders/`, `localization/`, `data/indexes/`) already exist with `.gitkeep`, so the validator no longer fails vacuously; added a `validate-content` DebugConsole command as a real caller.
+- **V7 (Low) — residuals.** `WorldStreamerNode` caches `StreamingRings` and rebuilds only when the exported radii/margin change (no per-frame allocation); `VehicleAvatar` moves the input-context push/pop into `OnPossessed`/`OnReleased` and no longer strands the player on unboard (releases the vehicle even if the tracked body isn't `IPossessable`); the `WorldClockNode` forecast placeholders are marked with a TODO.

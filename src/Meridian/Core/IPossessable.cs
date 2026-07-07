@@ -46,3 +46,10 @@ public interface IPossessable
     /// </summary>
     void ReceiveFrameInput(InputFrame input);
 }
+
+/// <summary>
+/// Published on the EventBus whenever the PlayerController's possessed entity changes (including to
+/// null on release). Systems that push stat modifiers onto the possessed body — e.g. weather — subscribe
+/// to migrate them across possession swaps (V3).
+/// </summary>
+public readonly record struct PossessionChangedEvent(IPossessable? NewEntity);

@@ -115,5 +115,10 @@ public partial class PlayerAvatar : CharacterBody3D, IPossessable
         {
             _interactor?.TryInteract();
         }
+
+        // TODO(combat, V4): the avatar has no EquipmentHolder/WeaponController yet, so InputFrame.FirePressed
+        // is compiled but never consumed and PlayerControllerNode.EquippedWeapon is never assigned. Wire up
+        // §5.2 composition (EquipmentHolder) + §6.3 weapon runtime to make firing and UpgradeBench reachable
+        // from play (the WeaponRuntime/DamagePipeline internals they'd use are already implemented and tested).
     }
 }

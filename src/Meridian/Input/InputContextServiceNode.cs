@@ -13,6 +13,9 @@ public partial class InputContextServiceNode : Node, IInputContextService
     public override void _EnterTree()
     {
         Services.Register<IInputContextService>(this);
+
+        // Ensure the gameplay actions the controller polls actually exist in the InputMap (V1).
+        InputMapBootstrap.EnsureDefaultBindings();
     }
 
     public override void _ExitTree()

@@ -18,6 +18,14 @@ public partial class Game : Node
         var inputService = Services.Get<IInputContextService>();
         inputService.Reset();
 
+        // This scene is active gameplay, so advance the app state machine to Playing (V5).
+        // Deferred so it runs after the GameDirector's own boot -> MainMenu deferred transition,
+        // yielding Boot -> MainMenu -> Playing per doc §3.4.
+        if (Services.TryGet<IGameDirector>(out var director) && director != null)
+        {
+            Callable.From(() => director.TransitionTo(GameState.Playing)).CallDeferred();
+        }
+
         // Print initial instructions
         GD.Print("[GameScene] Press the Backquote/Tilde (`) key to open the Debug Console.");
     }

@@ -1,8 +1,14 @@
 # ADR 0010: Streaming & Music Registered as Autoloads (Deviation from §3.4)
 
 **Date:** 2026-07-07
-**Status:** Accepted (interim) — supersede when the persistent Systems node lands
-**Context:** Code-review finding M2. Doc §3.4 explicitly lists streaming and music as **not** autoloads ("Streaming, UI root, spawners, dialogue bridge — Systems node children").
+**Status:** Resolved — the persistent Systems node now hosts streaming, music, and the PlayerController
+**Context:** Code-review findings M2 and V2. Doc §3.4 explicitly lists streaming and music as **not** autoloads ("Streaming, UI root, spawners, dialogue bridge — Systems node children").
+
+> **Update (V2 fix):** `scenes/game/Game.tscn` now has a persistent `Systems` node whose children are
+> `PlayerController` (`PlayerControllerNode`), `WorldStreamer` (`WorldStreamerNode`), and `MusicManager`
+> (`MusicManagerNode`). `WorldStreamer` and `MusicManager` were removed from `[autoload]`. This closes
+> M2 and resolves V2 (the PlayerController was previously never instantiated). The migration plan below
+> is retained for historical context.
 
 ---
 

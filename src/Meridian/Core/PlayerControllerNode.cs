@@ -121,6 +121,7 @@ public partial class PlayerControllerNode : Node, IPlayerController, IInventoryP
         _possessedEntity = entity;
         _possessedEntity.OnPossessed(this);
         GD.Print($"[PlayerController] Possessed: {entity.GetType().Name}");
+        PublishPossessionChanged();
     }
 
     public void Release()
@@ -131,6 +132,15 @@ public partial class PlayerControllerNode : Node, IPlayerController, IInventoryP
             var old = _possessedEntity;
             _possessedEntity = null;
             old.OnReleased();
+            PublishPossessionChanged();
+        }
+    }
+
+    private void PublishPossessionChanged()
+    {
+        if (Services.TryGet<IEventBus>(out var eventBus) && eventBus != null)
+        {
+            eventBus.Publish(new PossessionChangedEvent(_possessedEntity));
         }
     }
 

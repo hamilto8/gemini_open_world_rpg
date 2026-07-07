@@ -1,4 +1,5 @@
 using Godot;
+using System;
 using System.Collections.Generic;
 using Meridian.Core;
 using Meridian.Data;
@@ -24,6 +25,8 @@ public partial class WeatherSystemNode : Node, IWeatherSystem
     private WeatherProfile? _currentWeather;
     private float _currentIntensity = 1.0f;
     private Modifier? _activeWeatherModifier;
+    private StatBlockNode? _modifierTarget;
+    private IDisposable? _possessionSubscription;
 
     public WeatherProfile? CurrentWeather => _currentWeather;
     public string CurrentWeatherId => _currentWeather?.WeatherId ?? "clear";
@@ -38,6 +41,13 @@ public partial class WeatherSystemNode : Node, IWeatherSystem
     {
         IndexProfiles();
 
+        // Re-target the weather modifier whenever the possessed body changes (e.g. boarding a vehicle),
+        // so it can't strand on a stale StatBlock (V3).
+        if (Services.TryGet<IEventBus>(out var eventBus) && eventBus != null)
+        {
+            _possessionSubscription = eventBus.Subscribe<PossessionChangedEvent>(OnPossessionChanged);
+        }
+
         if (DefaultWeather != null)
         {
             _currentWeather = DefaultWeather;
@@ -47,12 +57,22 @@ public partial class WeatherSystemNode : Node, IWeatherSystem
 
     public override void _ExitTree()
     {
+        _possessionSubscription?.Dispose();
+        _possessionSubscription = null;
+
         RemoveWeatherModifiers();
 
         if (Services.TryGet<IWeatherSystem>(out var current) && ReferenceEquals(current, this))
         {
             Services.Unregister<IWeatherSystem>();
         }
+    }
+
+    private void OnPossessionChanged(PossessionChangedEvent ev)
+    {
+        // Move the active weather modifier off the previous body and onto the new one.
+        RemoveWeatherModifiers();
+        ApplyWeatherModifiers();
     }
 
     private void IndexProfiles()
@@ -131,6 +151,9 @@ public partial class WeatherSystemNode : Node, IWeatherSystem
                     sourceTag: $"weather_{_currentWeather.WeatherId}"
                 );
 
+                // Remember the exact StatBlock we pushed to so removal targets it even after the
+                // possessed entity changes (V3).
+                _modifierTarget = stats;
                 stats.AddModifier(_activeWeatherModifier);
             }
         }
@@ -143,12 +166,9 @@ public partial class WeatherSystemNode : Node, IWeatherSystem
             return;
         }
 
-        if (Services.TryGet<IPlayerController>(out var pc) && pc?.PossessedEntity is Node avatarNode)
-        {
-            var stats = avatarNode.GetNodeOrNull<StatBlockNode>("StatBlock");
-            stats?.RemoveModifier(_activeWeatherModifier);
-        }
-
+        // Remove from the StatBlock the modifier was actually applied to, not whatever is possessed now.
+        _modifierTarget?.RemoveModifier(_activeWeatherModifier);
+        _modifierTarget = null;
         _activeWeatherModifier = null;
     }
 }

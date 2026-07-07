@@ -55,6 +55,9 @@ public partial class WorldStreamerNode : Node, IWorldStreamer
     private bool _hasInterestSample;
     private int _instancesThisFrame;
 
+    private StreamingRings? _rings;
+    private Vector4 _lastRingParams = new(float.NaN, float.NaN, float.NaN, float.NaN);
+
     public WorldStateStore StateStore => _stateStore;
     public IReadOnlyDictionary<Vector2I, CellState> CellStates => _cellStates;
     public string? CurrentRegionId => ActiveRegion?.Id;
@@ -101,7 +104,7 @@ public partial class WorldStreamerNode : Node, IWorldStreamer
         ResolvePlayer();
 
         Vector2 interest = ComputeInterestPoint((float)delta);
-        var rings = new StreamingRings(ActiveRadius, SimulatedRadius, VisualRadius, HysteresisMargin);
+        StreamingRings rings = GetRings();
 
         _instancesThisFrame = 0;
 
@@ -115,6 +118,18 @@ public partial class WorldStreamerNode : Node, IWorldStreamer
 
             StepCell(gridPos, cellDef, current, target);
         }
+    }
+
+    private StreamingRings GetRings()
+    {
+        // Rebuild only when the exported radii/margin change, instead of allocating every frame (V7).
+        var current = new Vector4(ActiveRadius, SimulatedRadius, VisualRadius, HysteresisMargin);
+        if (_rings == null || current != _lastRingParams)
+        {
+            _rings = new StreamingRings(ActiveRadius, SimulatedRadius, VisualRadius, HysteresisMargin);
+            _lastRingParams = current;
+        }
+        return _rings;
     }
 
     private void EnsureCellIndex()

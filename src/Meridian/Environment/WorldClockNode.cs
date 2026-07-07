@@ -117,6 +117,9 @@ public partial class WorldClockNode : Node, IWorldClock, ISaveParticipant
     {
         string weatherId = "clear";
         float intensity = 0f;
+
+        // TODO(weather forecast, V7): WeatherElapsed/ForecastSeed are placeholders; RestoreState ignores
+        // both. Persist real values once the WeatherSystem grows a time-driven forecast queue.
         float elapsed = 0f;
         int seed = 1234;
 

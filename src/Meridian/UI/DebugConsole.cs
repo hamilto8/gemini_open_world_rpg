@@ -113,8 +113,28 @@ public partial class DebugConsole : Control
                     LogMessage("  set-weather <weatherId> [intensity] - Sets current weather");
                     LogMessage("  save <slotName> - Atomically saves the game state to slot");
                     LogMessage("  load <slotName> - Loads game state from slot");
+                    LogMessage("  validate-content - Scans data/ for broken references and duplicate ids");
                     LogMessage("  help - Shows this list");
                     break;
+
+                case "validate-content":
+                {
+                    string projectRoot = ProjectSettings.GlobalizePath("res://");
+                    var validator = new Meridian.Core.Validation.ContentValidator(projectRoot);
+                    if (validator.ValidateContent(out var errors))
+                    {
+                        LogMessage("Content validation passed.", new Color(0.3f, 0.9f, 0.3f));
+                    }
+                    else
+                    {
+                        LogMessage($"Content validation found {errors.Count} issue(s):", new Color(0.9f, 0.3f, 0.3f));
+                        foreach (var error in errors)
+                        {
+                            LogMessage($"  {error}", new Color(0.9f, 0.5f, 0.3f));
+                        }
+                    }
+                    break;
+                }
 
                 case "set-time":
                     if (parts.Length < 2)

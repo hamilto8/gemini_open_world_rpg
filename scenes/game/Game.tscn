@@ -1,4 +1,4 @@
-[gd_scene load_steps=7 format=3 uid="uid://c1y7v3e"]
+[gd_scene load_steps=10 format=3 uid="uid://c1y7v3e"]
 
 [ext_resource type="Script" path="res://scenes/game/Game.cs" id="1_script"]
 [ext_resource type="PackedScene" uid="uid://c6y7v3e" path="res://scenes/player/PlayerAvatar.tscn" id="2_avatar"]
@@ -6,6 +6,9 @@
 [ext_resource type="Script" path="res://src/Meridian/UI/PerfHud.cs" id="4_perfhud"]
 [ext_resource type="Script" path="res://src/Meridian/UI/DebugConsole.cs" id="5_console"]
 [ext_resource type="Script" path="res://src/Meridian/UI/MinimalHud.cs" id="6_hud"]
+[ext_resource type="Script" path="res://src/Meridian/Core/PlayerControllerNode.cs" id="7_playercontroller"]
+[ext_resource type="Script" path="res://src/Meridian/World/WorldStreamerNode.cs" id="8_streamer"]
+[ext_resource type="Script" path="res://src/Meridian/Audio/MusicManagerNode.cs" id="9_music"]
 
 [sub_resource type="BoxShape3D" id="BoxShape3D_target"]
 size = Vector3(1, 2, 1)
@@ -15,6 +18,17 @@ size = Vector3(1, 2, 1)
 
 [node name="Game" type="Node"]
 script = ExtResource("1_script")
+
+[node name="Systems" type="Node" parent="."]
+
+[node name="PlayerController" type="Node" parent="Systems"]
+script = ExtResource("7_playercontroller")
+
+[node name="WorldStreamer" type="Node" parent="Systems"]
+script = ExtResource("8_streamer")
+
+[node name="MusicManager" type="Node" parent="Systems"]
+script = ExtResource("9_music")
 
 [node name="WorldEnvironment" type="WorldEnvironment" parent="."]
 
