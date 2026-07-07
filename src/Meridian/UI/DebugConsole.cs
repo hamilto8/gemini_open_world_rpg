@@ -64,6 +64,15 @@ public partial class DebugConsole : Control
         }
     }
 
+    /// <summary>Opens the console (used by the pause menu's "Debug Console" option).</summary>
+    public void Open()
+    {
+        if (!_isVisible)
+        {
+            ToggleConsole();
+        }
+    }
+
     private void ToggleConsole()
     {
         _isVisible = !_isVisible;

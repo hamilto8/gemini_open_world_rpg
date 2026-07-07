@@ -68,6 +68,9 @@ public static class InputMapBootstrap
         AddJoyAxis("aim", JoyAxis.TriggerLeft, 1.0f);
         // Note: "look" is an InputContextService permission (gated via IsActionAllowed) and needs no
         // InputMap entry — mouse-look reads InputEventMouseMotion; stick-look reads look_* above.
+
+        // Apply the player's saved keyboard rebindings over the defaults just registered.
+        InputRebindStore.Load();
     }
 
     private static void AddKey(string action, Key physicalKey)
