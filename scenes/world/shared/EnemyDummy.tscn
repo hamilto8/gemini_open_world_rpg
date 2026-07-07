@@ -1,0 +1,59 @@
+[gd_scene load_steps=7 format=3 uid="uid://dprop_enemy"]
+
+[ext_resource type="Script" path="res://src/Meridian/Combat/DummyTarget.cs" id="1_script"]
+
+[sub_resource type="BoxShape3D" id="col"]
+size = Vector3(0.8, 2.0, 0.5)
+
+[sub_resource type="StandardMaterial3D" id="mat_body"]
+albedo_color = Color(0.6, 0.16, 0.16, 1)
+
+[sub_resource type="StandardMaterial3D" id="mat_head"]
+albedo_color = Color(0.78, 0.62, 0.5, 1)
+
+[sub_resource type="BoxMesh" id="torso"]
+size = Vector3(0.55, 0.8, 0.3)
+
+[sub_resource type="SphereMesh" id="head"]
+radius = 0.22
+height = 0.44
+
+[sub_resource type="BoxMesh" id="limb"]
+size = Vector3(0.16, 0.7, 0.16)
+
+[node name="EnemyDummy" type="StaticBody3D"]
+script = ExtResource("1_script")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 0)
+shape = SubResource("col")
+
+[node name="Torso" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.15, 0)
+material_override = SubResource("mat_body")
+mesh = SubResource("torso")
+
+[node name="Head" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.75, 0)
+material_override = SubResource("mat_head")
+mesh = SubResource("head")
+
+[node name="LegL" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.14, 0.4, 0)
+material_override = SubResource("mat_body")
+mesh = SubResource("limb")
+
+[node name="LegR" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.14, 0.4, 0)
+material_override = SubResource("mat_body")
+mesh = SubResource("limb")
+
+[node name="ArmL" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.42, 1.2, 0)
+material_override = SubResource("mat_body")
+mesh = SubResource("limb")
+
+[node name="ArmR" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.42, 1.2, 0)
+material_override = SubResource("mat_body")
+mesh = SubResource("limb")

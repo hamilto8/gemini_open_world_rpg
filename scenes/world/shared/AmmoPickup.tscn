@@ -1,0 +1,60 @@
+[gd_scene load_steps=8 format=3 uid="uid://dprop_ammo"]
+
+[ext_resource type="Script" path="res://scenes/world/shared/AmmoPickup.cs" id="1_script"]
+
+[sub_resource type="BoxShape3D" id="col"]
+size = Vector3(0.5, 1.4, 0.42)
+
+[sub_resource type="StandardMaterial3D" id="mat_crate"]
+albedo_color = Color(0.32, 0.36, 0.2, 1)
+
+[sub_resource type="StandardMaterial3D" id="mat_label"]
+albedo_color = Color(0.85, 0.72, 0.15, 1)
+
+[sub_resource type="StandardMaterial3D" id="mat_brass"]
+albedo_color = Color(0.82, 0.62, 0.2, 1)
+metallic = 0.6
+roughness = 0.35
+
+[sub_resource type="BoxMesh" id="crate"]
+size = Vector3(0.4, 0.26, 0.32)
+
+[sub_resource type="BoxMesh" id="label"]
+size = Vector3(0.42, 0.09, 0.02)
+
+[sub_resource type="CylinderMesh" id="round"]
+top_radius = 0.012
+bottom_radius = 0.03
+height = 0.15
+
+[node name="AmmoPickup" type="StaticBody3D"]
+script = ExtResource("1_script")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.1, 0)
+shape = SubResource("col")
+
+[node name="Crate" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.05, 0)
+material_override = SubResource("mat_crate")
+mesh = SubResource("crate")
+
+[node name="Label" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.07, 0.16)
+material_override = SubResource("mat_label")
+mesh = SubResource("label")
+
+[node name="Round1" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.1, 1.26, 0.04)
+material_override = SubResource("mat_brass")
+mesh = SubResource("round")
+
+[node name="Round2" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.26, 0.04)
+material_override = SubResource("mat_brass")
+mesh = SubResource("round")
+
+[node name="Round3" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.1, 1.26, 0.04)
+material_override = SubResource("mat_brass")
+mesh = SubResource("round")

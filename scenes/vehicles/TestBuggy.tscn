@@ -1,0 +1,72 @@
+[gd_scene load_steps=8 format=3 uid="uid://dprop_buggy"]
+
+[ext_resource type="Script" path="res://src/Meridian/Vehicles/VehicleAvatar.cs" id="1_script"]
+
+[sub_resource type="BoxShape3D" id="col"]
+size = Vector3(1.8, 1.2, 3.4)
+
+[sub_resource type="StandardMaterial3D" id="mat_body"]
+albedo_color = Color(0.85, 0.38, 0.13, 1)
+metallic = 0.2
+roughness = 0.5
+
+[sub_resource type="StandardMaterial3D" id="mat_cabin"]
+albedo_color = Color(0.15, 0.18, 0.24, 1)
+metallic = 0.3
+roughness = 0.3
+
+[sub_resource type="StandardMaterial3D" id="mat_wheel"]
+albedo_color = Color(0.08, 0.08, 0.09, 1)
+roughness = 0.8
+
+[sub_resource type="BoxMesh" id="chassis"]
+size = Vector3(1.8, 0.45, 3.2)
+
+[sub_resource type="BoxMesh" id="cabin"]
+size = Vector3(1.4, 0.5, 1.5)
+
+[sub_resource type="CylinderMesh" id="wheel"]
+top_radius = 0.4
+bottom_radius = 0.4
+height = 0.35
+radial_segments = 20
+
+[node name="TestBuggy" type="CharacterBody3D"]
+script = ExtResource("1_script")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.6, 0)
+shape = SubResource("col")
+
+[node name="Chassis" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.55, 0)
+material_override = SubResource("mat_body")
+mesh = SubResource("chassis")
+
+[node name="Cabin" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.95, 0.2)
+material_override = SubResource("mat_cabin")
+mesh = SubResource("cabin")
+
+[node name="WheelFL" type="MeshInstance3D" parent="."]
+transform = Transform3D(0, -1, 0, 1, 0, 0, 0, 0, 1, -0.95, 0.4, -1.1)
+material_override = SubResource("mat_wheel")
+mesh = SubResource("wheel")
+
+[node name="WheelFR" type="MeshInstance3D" parent="."]
+transform = Transform3D(0, -1, 0, 1, 0, 0, 0, 0, 1, 0.95, 0.4, -1.1)
+material_override = SubResource("mat_wheel")
+mesh = SubResource("wheel")
+
+[node name="WheelRL" type="MeshInstance3D" parent="."]
+transform = Transform3D(0, -1, 0, 1, 0, 0, 0, 0, 1, -0.95, 0.4, 1.1)
+material_override = SubResource("mat_wheel")
+mesh = SubResource("wheel")
+
+[node name="WheelRR" type="MeshInstance3D" parent="."]
+transform = Transform3D(0, -1, 0, 1, 0, 0, 0, 0, 1, 0.95, 0.4, 1.1)
+material_override = SubResource("mat_wheel")
+mesh = SubResource("wheel")
+
+[node name="Camera3D" type="Camera3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 0.955, 0.296, 0, -0.296, 0.955, 0, 3.2, 6.5)

@@ -1,0 +1,62 @@
+[gd_scene load_steps=8 format=3 uid="uid://dprop_crate"]
+
+[ext_resource type="Script" path="res://scenes/world/shared/LootContainer.cs" id="1_script"]
+
+[sub_resource type="BoxShape3D" id="col"]
+size = Vector3(1.05, 0.95, 0.75)
+
+[sub_resource type="StandardMaterial3D" id="mat_wood"]
+albedo_color = Color(0.45, 0.31, 0.18, 1)
+
+[sub_resource type="StandardMaterial3D" id="mat_wood_light"]
+albedo_color = Color(0.55, 0.4, 0.24, 1)
+
+[sub_resource type="BoxMesh" id="body"]
+size = Vector3(1.0, 0.68, 0.7)
+
+[sub_resource type="BoxMesh" id="lid"]
+size = Vector3(1.04, 0.12, 0.74)
+
+[sub_resource type="BoxMesh" id="brace"]
+size = Vector3(1.05, 0.09, 0.03)
+
+[sub_resource type="BoxMesh" id="post"]
+size = Vector3(0.09, 0.68, 0.09)
+
+[node name="LootContainer" type="StaticBody3D"]
+script = ExtResource("1_script")
+Lid = NodePath("Lid")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.45, 0)
+shape = SubResource("col")
+
+[node name="Body" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.35, 0)
+material_override = SubResource("mat_wood")
+mesh = SubResource("body")
+
+[node name="Lid" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.76, 0)
+material_override = SubResource("mat_wood_light")
+mesh = SubResource("lid")
+
+[node name="BraceA" type="MeshInstance3D" parent="."]
+transform = Transform3D(0.766, 0.643, 0, -0.643, 0.766, 0, 0, 0, 1, 0, 0.35, 0.36)
+material_override = SubResource("mat_wood_light")
+mesh = SubResource("brace")
+
+[node name="BraceB" type="MeshInstance3D" parent="."]
+transform = Transform3D(0.766, -0.643, 0, 0.643, 0.766, 0, 0, 0, 1, 0, 0.35, 0.36)
+material_override = SubResource("mat_wood_light")
+mesh = SubResource("brace")
+
+[node name="PostL" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.5, 0.35, 0.36)
+material_override = SubResource("mat_wood_light")
+mesh = SubResource("post")
+
+[node name="PostR" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.5, 0.35, 0.36)
+material_override = SubResource("mat_wood_light")
+mesh = SubResource("post")

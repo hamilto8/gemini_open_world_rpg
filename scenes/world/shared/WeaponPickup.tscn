@@ -1,0 +1,61 @@
+[gd_scene load_steps=8 format=3 uid="uid://dprop_weapon"]
+
+[ext_resource type="Script" path="res://scenes/world/shared/WeaponPickup.cs" id="1_script"]
+
+[sub_resource type="BoxShape3D" id="col"]
+size = Vector3(1.0, 1.4, 0.5)
+
+[sub_resource type="StandardMaterial3D" id="mat_gun"]
+albedo_color = Color(0.16, 0.17, 0.2, 1)
+metallic = 0.4
+roughness = 0.5
+emission_enabled = true
+emission = Color(0.1, 0.16, 0.35, 1)
+emission_energy_multiplier = 0.4
+
+[sub_resource type="BoxMesh" id="body"]
+size = Vector3(0.5, 0.13, 0.09)
+
+[sub_resource type="BoxMesh" id="barrel"]
+size = Vector3(0.34, 0.05, 0.05)
+
+[sub_resource type="BoxMesh" id="grip"]
+size = Vector3(0.09, 0.22, 0.09)
+
+[sub_resource type="BoxMesh" id="magazine"]
+size = Vector3(0.07, 0.17, 0.06)
+
+[sub_resource type="BoxMesh" id="stock"]
+size = Vector3(0.18, 0.13, 0.07)
+
+[node name="WeaponPickup" type="StaticBody3D"]
+script = ExtResource("1_script")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.1, 0)
+shape = SubResource("col")
+
+[node name="Body" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.15, 0)
+material_override = SubResource("mat_gun")
+mesh = SubResource("body")
+
+[node name="Barrel" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.38, 1.17, 0)
+material_override = SubResource("mat_gun")
+mesh = SubResource("barrel")
+
+[node name="Grip" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 0.966, -0.259, 0, 0.259, 0.966, -0.14, 1.02, 0)
+material_override = SubResource("mat_gun")
+mesh = SubResource("grip")
+
+[node name="Magazine" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.03, 1.01, 0)
+material_override = SubResource("mat_gun")
+mesh = SubResource("magazine")
+
+[node name="Stock" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.31, 1.15, 0)
+material_override = SubResource("mat_gun")
+mesh = SubResource("stock")
