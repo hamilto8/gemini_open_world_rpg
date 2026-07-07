@@ -12,15 +12,22 @@ public partial class DummyTarget : StaticBody3D, IDamageable, IHitZoneResolver
 {
     [Export] public string TargetName { get; set; } = "Training Dummy";
     [Export] public float BaseArmor { get; set; } = 5.0f;
+    [Export] public float MaxHealth { get; set; } = 100.0f;
+
+    /// <summary>Seconds before a destroyed target respawns (0 = stays destroyed).</summary>
+    [Export] public float RespawnSeconds { get; set; } = 5.0f;
 
     /// <summary>Hits at least this many metres above the target's origin count as a headshot.</summary>
     [Export] public float HeadHeightThreshold { get; set; } = 1.6f;
 
     private StatBlockNode? _stats;
     private Tween? _pulseTween;
+    private uint _collisionLayer;
 
     public override void _Ready()
     {
+        _collisionLayer = CollisionLayer;
+
         // Add a local StatBlock component dynamically if missing
         _stats = GetNodeOrNull<StatBlockNode>("StatBlock");
         if (_stats == null)
@@ -30,8 +37,8 @@ public partial class DummyTarget : StaticBody3D, IDamageable, IHitZoneResolver
         }
 
         _stats.SetBaseStat("armor", BaseArmor);
-        _stats.SetBaseStat("max_health", 200f);
-        _stats.SetBaseStat("health", 200f);
+        _stats.SetBaseStat("max_health", MaxHealth);
+        _stats.SetBaseStat("health", MaxHealth);
     }
 
     /// <summary>Derives the hit zone from this target's own height (doc §6.1), never the shooter's camera (H1).</summary>
@@ -70,8 +77,38 @@ public partial class DummyTarget : StaticBody3D, IDamageable, IHitZoneResolver
             ));
         }
 
-        // Visual feedback: simple scale pulse
-        ScalePulse();
+        if (newHealth <= 0f)
+        {
+            Die();
+        }
+        else
+        {
+            // Visual feedback: simple scale pulse
+            ScalePulse();
+        }
+    }
+
+    private void Die()
+    {
+        GD.Print($"[DummyTarget] '{TargetName}' destroyed.");
+        Visible = false;
+        CollisionLayer = 0; // stop registering hits while destroyed
+
+        if (RespawnSeconds > 0f)
+        {
+            var respawn = CreateTween();
+            respawn.TweenInterval(RespawnSeconds);
+            respawn.TweenCallback(Callable.From(Respawn));
+        }
+    }
+
+    private void Respawn()
+    {
+        _stats?.SetBaseStat("health", MaxHealth);
+        Scale = Vector3.One;
+        Visible = true;
+        CollisionLayer = _collisionLayer;
+        GD.Print($"[DummyTarget] '{TargetName}' respawned.");
     }
 
     private void ScalePulse()

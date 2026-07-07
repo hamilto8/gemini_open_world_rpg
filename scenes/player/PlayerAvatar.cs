@@ -1,7 +1,9 @@
 using Godot;
 using System;
+using Meridian.Combat;
 using Meridian.Core;
 using Meridian.Input;
+using Meridian.Items;
 using Meridian.UI;
 
 namespace Meridian.Player;
@@ -11,12 +13,14 @@ namespace Meridian.Player;
 /// Implements IPossessable to receive and execute controller inputs.
 /// Enforces Section 5.2 composition rules.
 /// </summary>
-public partial class PlayerAvatar : CharacterBody3D, IPossessable
+public partial class PlayerAvatar : CharacterBody3D, IPossessable, IWeaponHolder
 {
     private StatBlockNode? _stats;
     private MovementMotor? _motor;
     private CameraRig? _cameraRig;
     private Interactor? _interactor;
+    private WeaponController? _weapon;
+    private Camera3D? _camera;
     private MinimalHud? _hud;
 
     private readonly LocomotionStateMachine _hsm = new();
@@ -28,6 +32,8 @@ public partial class PlayerAvatar : CharacterBody3D, IPossessable
         _motor = GetNodeOrNull<MovementMotor>("MovementMotor");
         _cameraRig = GetNodeOrNull<CameraRig>("CameraRig");
         _interactor = GetNodeOrNull<Interactor>("CameraRig/Interactor");
+        _weapon = GetNodeOrNull<WeaponController>("WeaponController");
+        _camera = GetNodeOrNull<Camera3D>("CameraRig/Camera3D");
 
         // Automatically bind or find HUD in UILayer
         var root = GetTree().CurrentScene;
@@ -72,6 +78,30 @@ public partial class PlayerAvatar : CharacterBody3D, IPossessable
     public void OnPossessed(IPlayerController controller)
     {
         GD.Print("[PlayerAvatar] Possessed by controller.");
+        // Re-activate the on-foot camera (a boarded vehicle switches to its own).
+        _camera?.MakeCurrent();
+    }
+
+    /// <summary>Wires a picked-up weapon to the firing controller and remembers it for upgrades (IWeaponHolder).</summary>
+    public void EquipWeapon(WeaponInstance instance, IWeaponDefinition definition)
+    {
+        if (_weapon == null) return;
+
+        InventoryModel inventory = Services.TryGet<IInventoryProvider>(out var provider) && provider != null
+            ? provider.Inventory
+            : new InventoryModel { AllowUnregisteredItems = true };
+
+        _weapon.Initialize(instance, definition, inventory);
+        if (provider != null)
+        {
+            provider.EquippedWeapon = instance;
+        }
+
+        if (Services.TryGet<IEventBus>(out var eventBus) && eventBus != null)
+        {
+            eventBus.Publish(new WeaponEquippedEvent(definition.Id, instance.CurrentAmmo, definition.MagazineSize));
+        }
+        GD.Print($"[PlayerAvatar] Equipped weapon '{definition.DisplayName}'.");
     }
 
     public void OnReleased()
@@ -117,9 +147,28 @@ public partial class PlayerAvatar : CharacterBody3D, IPossessable
             _interactor?.TryInteract();
         }
 
-        // TODO(combat, V4): the avatar has no EquipmentHolder/WeaponController yet, so InputFrame.FirePressed
-        // is compiled but never consumed and PlayerControllerNode.EquippedWeapon is never assigned. Wire up
-        // §5.2 composition (EquipmentHolder) + §6.3 weapon runtime to make firing and UpgradeBench reachable
-        // from play (the WeaponRuntime/DamagePipeline internals they'd use are already implemented and tested).
+        // 6. Weapon: fire from the camera crosshair, reload on demand (§6.3).
+        HandleWeapon();
+    }
+
+    private void HandleWeapon()
+    {
+        if (_weapon == null) return;
+
+        if (_lastInput.ReloadPressed)
+        {
+            _weapon.StartReload();
+        }
+
+        if (_lastInput.FirePressed && _weapon.CanFire())
+        {
+            Camera3D? cam = _camera ?? GetViewport().GetCamera3D();
+            if (cam != null)
+            {
+                Vector3 origin = cam.GlobalPosition;
+                Vector3 direction = -cam.GlobalTransform.Basis.Z; // camera forward = crosshair
+                _weapon.Fire(origin, direction);
+            }
+        }
     }
 }

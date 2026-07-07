@@ -12,5 +12,5 @@ public interface IInventoryProvider
     InventoryModel Inventory { get; }
 
     /// <summary>The currently equipped weapon instance, or null if none is equipped.</summary>
-    WeaponInstance? EquippedWeapon { get; }
+    WeaponInstance? EquippedWeapon { get; set; }
 }

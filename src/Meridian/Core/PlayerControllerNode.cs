@@ -179,6 +179,11 @@ public partial class PlayerControllerNode : Node, IPlayerController, IInventoryP
             frame.FirePressed = Godot.Input.IsActionJustPressed("fire");
         }
 
+        if (inputService.IsActionAllowed("reload"))
+        {
+            frame.ReloadPressed = Godot.Input.IsActionJustPressed("reload");
+        }
+
         if (inputService.IsActionAllowed("jump"))
         {
             frame.JumpPressed = Godot.Input.IsActionJustPressed("jump");

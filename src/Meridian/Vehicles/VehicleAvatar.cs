@@ -41,6 +41,20 @@ public partial class VehicleAvatar : CharacterBody3D, IPossessable, IInteractabl
 
     public override void _Ready()
     {
+        // Fall back to a sensible default handling profile so a vehicle placed in a scene without an
+        // authored HandlingProfile is still drivable (test world convenience).
+        if (Profile == null)
+        {
+            _profile = new HandlingProfile
+            {
+                Id = "default_buggy",
+                MaxSpeed = 22.0f,
+                Acceleration = 12.0f,
+                SteeringLimit = 35.0f,
+                BrakingStrength = 24.0f,
+                FuelBurnRate = 1.0f,
+            };
+        }
         InitializeMotor();
     }
 
@@ -101,6 +115,10 @@ public partial class VehicleAvatar : CharacterBody3D, IPossessable, IInteractabl
         {
             inputService.PushContext(InputContextType.Vehicle);
         }
+
+        // Switch to the vehicle's chase camera while driving (the on-foot camera is disabled with the
+        // hidden avatar); the avatar re-activates its own camera in PlayerAvatar.OnPossessed on exit.
+        GetNodeOrNull<Camera3D>("Camera3D")?.MakeCurrent();
 
         GD.Print("[VehicleAvatar] Possessed by controller.");
     }

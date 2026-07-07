@@ -15,9 +15,12 @@ public partial class MinimalHud : Control
     private ProgressBar? _staminaBar;
     private TextureRect? _reticle;
     private Label? _interactPrompt;
+    private Label? _ammoLabel;
 
     private IDisposable? _focusSubscription;
     private IDisposable? _deviceSubscription;
+    private IDisposable? _ammoSubscription;
+    private IDisposable? _equipSubscription;
     private Meridian.Player.InteractionFocusChangedEvent _currentFocus;
 
     public override void _Ready()
@@ -47,6 +50,9 @@ public partial class MinimalHud : Control
             container.AddChild(_staminaBar);
             container.AddChild(_interactPrompt);
 
+            _ammoLabel = new Label { Name = "AmmoLabel", Text = "", Visible = false };
+            container.AddChild(_ammoLabel);
+
             // Center crosshair reticle (aim)
             _reticle = new TextureRect
             {
@@ -66,12 +72,30 @@ public partial class MinimalHud : Control
         var eventBus = Services.Get<IEventBus>();
         _focusSubscription = eventBus.Subscribe<Meridian.Player.InteractionFocusChangedEvent>(OnInteractionFocusChanged);
         _deviceSubscription = eventBus.Subscribe<InputDeviceChangedEvent>(_ => RenderInteractPrompt());
+        _ammoSubscription = eventBus.Subscribe<Meridian.Combat.WeaponAmmoChangedEvent>(OnAmmoChanged);
+        _equipSubscription = eventBus.Subscribe<Meridian.Combat.WeaponEquippedEvent>(OnWeaponEquipped);
     }
 
     public override void _ExitTree()
     {
         _focusSubscription?.Dispose();
         _deviceSubscription?.Dispose();
+        _ammoSubscription?.Dispose();
+        _equipSubscription?.Dispose();
+    }
+
+    private void OnWeaponEquipped(Meridian.Combat.WeaponEquippedEvent ev)
+    {
+        if (_ammoLabel == null) return;
+        _ammoLabel.Visible = true;
+        _ammoLabel.Text = $"Ammo: {ev.CurrentAmmo} / {ev.MagazineSize}";
+    }
+
+    private void OnAmmoChanged(Meridian.Combat.WeaponAmmoChangedEvent ev)
+    {
+        if (_ammoLabel == null) return;
+        _ammoLabel.Visible = true;
+        _ammoLabel.Text = $"Ammo: {ev.CurrentAmmo} / {ev.MagazineSize}  (reserve {ev.Reserve})";
     }
 
     private static void SetChildrenMouseIgnore(Node root)

@@ -1,4 +1,5 @@
 using Godot;
+using Meridian.Core;
 using Meridian.Data;
 using Meridian.Items;
 
@@ -16,22 +17,43 @@ public partial class WeaponController : Node
     private IWeaponDefinition? _definition;
     private WeaponInstance? _instance;
     private WeaponRuntime? _runtime;
+    private InventoryModel? _inventory;
+    private int _lastPublishedAmmo = -1;
 
     public IWeaponDefinition? Definition => _definition ?? DefinitionResource;
     public WeaponInstance? Instance => _instance;
     public bool IsReloading => _runtime?.IsReloading ?? false;
     public double ReloadProgress => _runtime?.ReloadProgress ?? 0.0;
+    public int CurrentAmmo => _instance?.CurrentAmmo ?? 0;
+    public int MagazineSize => Definition?.MagazineSize ?? 0;
 
     public override void _PhysicsProcess(double delta)
     {
         _runtime?.Tick(delta);
+        PublishAmmoIfChanged(); // catches reload completion, which finishes inside the runtime tick
     }
 
     public void Initialize(WeaponInstance instance, IWeaponDefinition definition, InventoryModel inventory)
     {
         _instance = instance;
         _definition = definition;
+        _inventory = inventory;
         _runtime = new WeaponRuntime(instance, definition, inventory);
+        _lastPublishedAmmo = -1;
+        PublishAmmoIfChanged();
+    }
+
+    private void PublishAmmoIfChanged()
+    {
+        if (_instance == null || Definition == null) return;
+        if (_instance.CurrentAmmo == _lastPublishedAmmo) return;
+
+        _lastPublishedAmmo = _instance.CurrentAmmo;
+        int reserve = _inventory?.GetItemCount(Definition.AmmoTypeId) ?? 0;
+        if (Services.TryGet<IEventBus>(out var eventBus) && eventBus != null)
+        {
+            eventBus.Publish(new WeaponAmmoChangedEvent(_instance.CurrentAmmo, Definition.MagazineSize, reserve));
+        }
     }
 
     public bool CanFire() => _runtime?.CanFire() ?? false;

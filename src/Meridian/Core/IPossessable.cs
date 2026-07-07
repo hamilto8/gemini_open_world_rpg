@@ -26,6 +26,7 @@ public struct InputFrame
     public bool CrouchHeld;
     public bool AimHeld;
     public bool FirePressed;
+    public bool ReloadPressed;
     public bool InteractPressed;
 
     /// <summary>Held brake input (vehicles). Distinct from <c>JumpPressed</c>, which is edge-triggered.</summary>
