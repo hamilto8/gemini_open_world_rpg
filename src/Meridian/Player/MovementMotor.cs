@@ -57,25 +57,24 @@ public partial class MovementMotor : Node
             }
         }
 
-        // 3. Resolve Speeds (influenced by StatBlock speed modifier)
-        float speed = ResolveTargetSpeed(state, isAiming);
+        // 3. Resolve target speed from the analog input magnitude: keyboard is always full tilt (1.0),
+        //    while the gamepad stick gives 0..1 for speed-proportional movement.
+        float inputMagnitude = Mathf.Min(new Vector2(input.MoveX, input.MoveY).Length(), 1.0f);
+        float speed = ResolveTargetSpeed(state, isAiming, inputMagnitude);
 
-        // Get movement input direction relative to body rotation
-        Vector3 inputDir = new Vector3(input.MoveX, 0, -input.MoveY).Normalized();
-        Vector3 direction = (_body.GlobalTransform.Basis * inputDir).Normalized();
-
-        // 4. Integrate horizontal acceleration and friction
+        // 4. Integrate horizontal acceleration and friction. Direction is unit length; the magnitude is
+        //    carried entirely by `speed`, so partial stick tilt yields a slower walk in the same heading.
         Vector2 horizontalVelocity = new Vector2(velocity.X, velocity.Z);
-        Vector2 targetHorizontal = new Vector2(direction.X, direction.Z) * speed;
 
-        if (direction.LengthSquared() > 0.01f)
+        if (inputMagnitude > 0.001f)
         {
-            // Accelerate
+            Vector3 localDir = new Vector3(input.MoveX, 0, -input.MoveY).Normalized();
+            Vector3 direction = (_body.GlobalTransform.Basis * localDir).Normalized();
+            Vector2 targetHorizontal = new Vector2(direction.X, direction.Z) * speed;
             horizontalVelocity = horizontalVelocity.Lerp(targetHorizontal, Profile.Acceleration * (float)delta);
         }
         else
         {
-            // Decelerate / Friction
             horizontalVelocity = horizontalVelocity.Lerp(Vector2.Zero, Profile.Friction * (float)delta);
         }
 
@@ -104,17 +103,38 @@ public partial class MovementMotor : Node
         }
     }
 
-    private float ResolveTargetSpeed(LocomotionState state, bool isAiming)
+    private float ResolveTargetSpeed(LocomotionState state, bool isAiming, float inputMagnitude)
     {
         if (Profile == null) return 0f;
 
-        float baseSpeed = state switch
+        inputMagnitude = Mathf.Clamp(inputMagnitude, 0f, 1f);
+
+        float baseSpeed;
+        if (state == LocomotionState.Crouch)
         {
-            LocomotionState.Walk => Profile.WalkSpeed,
-            LocomotionState.Sprint => Profile.SprintSpeed,
-            LocomotionState.Crouch => Profile.CrouchSpeed,
-            _ => Profile.RunSpeed
-        };
+            baseSpeed = Profile.CrouchSpeed * inputMagnitude;
+        }
+        else if (state == LocomotionState.Sprint)
+        {
+            // Sprint ramps run -> sprint across the upper stick range (full tilt = full sprint).
+            baseSpeed = Mathf.Lerp(Profile.RunSpeed, Profile.SprintSpeed, inputMagnitude);
+        }
+        else
+        {
+            // Analog walk -> run curve: a gentle stick reaches WalkSpeed at WalkTiltThreshold, then
+            // ramps WalkSpeed -> RunSpeed up to full tilt. This is continuous (no walk/run pop) and
+            // keeps both speeds meaningful; keyboard (magnitude 1.0) always jogs at RunSpeed.
+            float walkTilt = Mathf.Clamp(Profile.WalkTiltThreshold, 0.05f, 1.0f);
+            if (inputMagnitude <= walkTilt)
+            {
+                baseSpeed = Profile.WalkSpeed * (inputMagnitude / walkTilt);
+            }
+            else
+            {
+                float t = (inputMagnitude - walkTilt) / (1.0f - walkTilt);
+                baseSpeed = Mathf.Lerp(Profile.WalkSpeed, Profile.RunSpeed, t);
+            }
+        }
 
         // Aiming reduces movement speed (Section 5.3 aiming speed caps)
         if (isAiming)

@@ -26,4 +26,10 @@ public partial class MovementProfile : Resource
 
     /// <summary>Baseline move_speed stat the RunSpeed etc. are authored against; the StatBlock ratio scales off this.</summary>
     [Export] public float BaseMoveSpeed { get; set; } = 5.0f;
+
+    /// <summary>
+    /// Analog-stick tilt (0..1) at which movement reaches <see cref="WalkSpeed"/>; beyond it, speed ramps
+    /// WalkSpeed→RunSpeed up to full tilt. Keyboard input is always full tilt, so it jogs at RunSpeed.
+    /// </summary>
+    [Export(PropertyHint.Range, "0.1,1.0,0.05")] public float WalkTiltThreshold { get; set; } = 0.5f;
 }
