@@ -155,4 +155,24 @@ public class InventoryTests : IDisposable
         Assert.True(lenient.AddItem(new ItemInstance("mystery", 1)));
         Assert.Equal(1, lenient.GetItemCount("mystery"));
     }
+
+    [Fact]
+    public void AddItem_WhenOverWeight_FailsWithoutMutatingInventory()
+    {
+        // Pickups rely on this contract: a false return must mean "nothing happened", so the pickup
+        // node can safely stay in the world instead of destroying the item (pickup item-loss fix).
+        var inventory = new InventoryModel { MaxWeight = 10.0f };
+        inventory.RegisterDefinition(new BasicItemDefinition("iron_ore", 99, 4.0f));
+        Assert.True(inventory.AddItem(new ItemInstance("iron_ore", 2))); // 8.0 of 10.0
+
+        bool changed = false;
+        inventory.InventoryChanged += () => changed = true;
+
+        // Would land partly in the existing stack — must be rejected atomically, not partially added.
+        Assert.False(inventory.AddItem(new ItemInstance("iron_ore", 2)));
+
+        Assert.False(changed);
+        Assert.Equal(2, inventory.GetItemCount("iron_ore"));
+        Assert.Equal(8.0f, inventory.CalculateTotalWeight(), 3);
+    }
 }

@@ -1,0 +1,10 @@
+[gd_resource type="Resource" script_class="WeatherIndex" load_steps=5 format=3 uid="uid://index_weather"]
+
+[ext_resource type="Script" path="res://src/Meridian/Data/Indexes/WeatherIndex.cs" id="1_script"]
+[ext_resource type="Resource" path="res://data/environment/weather_profiles/clear.tres" id="2_clear"]
+[ext_resource type="Resource" path="res://data/environment/weather_profiles/rain.tres" id="3_rain"]
+[ext_resource type="Resource" path="res://data/environment/weather_profiles/fog.tres" id="4_fog"]
+
+[resource]
+script = ExtResource("1_script")
+Definitions = Array[Resource]([ExtResource("2_clear"), ExtResource("3_rain"), ExtResource("4_fog")])

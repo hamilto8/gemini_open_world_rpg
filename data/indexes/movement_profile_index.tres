@@ -1,0 +1,8 @@
+[gd_resource type="Resource" script_class="MovementProfileIndex" load_steps=3 format=3 uid="uid://index_movement_profiles"]
+
+[ext_resource type="Script" path="res://src/Meridian/Data/Indexes/MovementProfileIndex.cs" id="1_script"]
+[ext_resource type="Resource" path="res://data/progression/level_curves/default_movement.tres" id="2_default_movement"]
+
+[resource]
+script = ExtResource("1_script")
+Definitions = Array[Resource]([ExtResource("2_default_movement")])

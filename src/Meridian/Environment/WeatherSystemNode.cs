@@ -2,6 +2,7 @@ using Godot;
 using System;
 using System.Collections.Generic;
 using Meridian.Core;
+using Meridian.Core.Registry;
 using Meridian.Data;
 
 namespace Meridian.Environment;
@@ -99,9 +100,28 @@ public partial class WeatherSystemNode : Node, IWeatherSystem
     public void ForceWeather(string weatherId, float intensity = 1.0f)
         => ApplyWeather(weatherId, intensity, 0f);
 
+    // Resolves a weather profile by id, preferring the data-driven content registry over scene-exported
+    // profiles. This is what lets a save-restore outside Game.tscn (e.g. a menu scene, or the streamer
+    // forcing "clear") find its profile: the autoload WeatherSystem carries no exported profiles, but the
+    // ContentDatabase registers them from data/environment/weather_profiles (§12, §16.2, §19.1). The
+    // exported dictionary stays a fallback so a WeatherSystem placed in a scene without a ContentDatabase
+    // remains self-contained. The registry stores WeatherProfile Resources; a non-WeatherProfile entry
+    // (only possible from a headless test) falls through to the exported fallback.
+    private bool TryResolveProfile(string weatherId, out WeatherProfile? profile)
+    {
+        if (Services.TryGet<IContentDatabase>(out var db) && db != null
+            && db.WeatherProfiles.TryGet(weatherId, out var registered) && registered is WeatherProfile fromRegistry)
+        {
+            profile = fromRegistry;
+            return true;
+        }
+
+        return _profilesById.TryGetValue(weatherId, out profile);
+    }
+
     private void ApplyWeather(string weatherId, float intensity, float transitionDurationSeconds)
     {
-        if (!_profilesById.TryGetValue(weatherId, out var profile))
+        if (!TryResolveProfile(weatherId, out var profile) || profile == null)
         {
             GD.PushWarning($"[WeatherSystem] Unknown weather id '{weatherId}'; transition ignored.");
             return;

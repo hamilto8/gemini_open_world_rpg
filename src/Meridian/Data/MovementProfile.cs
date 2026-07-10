@@ -4,11 +4,15 @@ namespace Meridian.Data;
 
 /// <summary>
 /// Immutable movement profile configuration data contract.
+/// Implements <see cref="IMovementProfile"/> for registry/validator decoupling (ADR-0003).
 /// Enforces Section 5.2 (MovementMotor) requirements.
 /// </summary>
 [GlobalClass]
-public partial class MovementProfile : Resource
+public partial class MovementProfile : Resource, IMovementProfile
 {
+    /// <summary>Permanent snake_case id; keys this profile in the movement-profile registry (§19.9).</summary>
+    [Export] public string Id { get; set; } = "";
+
     // Two gaits: WalkSpeed is the analog-stick ceiling; RunSpeed is reached only with the run modifier
     // (R3 on gamepad / Shift on keyboard). CrouchSpeed applies while crouched.
     [Export] public float WalkSpeed { get; set; } = 2.5f;

@@ -1,0 +1,8 @@
+[gd_resource type="Resource" script_class="WeaponIndex" load_steps=3 format=3 uid="uid://index_weapons"]
+
+[ext_resource type="Script" path="res://src/Meridian/Data/Indexes/WeaponIndex.cs" id="1_script"]
+[ext_resource type="Resource" path="res://data/weapons/definitions/test_pistol.tres" id="2_test_pistol"]
+
+[resource]
+script = ExtResource("1_script")
+Definitions = Array[Resource]([ExtResource("2_test_pistol")])

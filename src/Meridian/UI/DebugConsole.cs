@@ -1,6 +1,8 @@
 using Godot;
 using System;
+using System.Collections.Generic;
 using Meridian.Core;
+using Meridian.Core.Logic;
 using Meridian.Core.Save;
 using Meridian.Environment;
 using Meridian.Input;
@@ -122,9 +124,117 @@ public partial class DebugConsole : Control
                     LogMessage("  set-weather <weatherId> [intensity] - Sets current weather");
                     LogMessage("  save <slotName> - Atomically saves the game state to slot");
                     LogMessage("  load <slotName> - Loads game state from slot");
+                    LogMessage("  flag <id> [true|false] - Gets or sets a world flag");
+                    LogMessage("  action <verb> [args...] - Runs a validated GameAction (e.g. action give_item medkit 2)");
                     LogMessage("  validate-content - Scans data/ for broken references and duplicate ids");
                     LogMessage("  help - Shows this list");
                     break;
+
+                case "flag":
+                {
+                    if (parts.Length < 2)
+                    {
+                        LogMessage("Usage: flag <id> [true|false]", new Color(0.9f, 0.3f, 0.3f));
+                        break;
+                    }
+
+                    if (!Services.TryGet<IWorldFlags>(out var flags) || flags == null)
+                    {
+                        LogMessage("World flags service is not registered.", new Color(0.9f, 0.3f, 0.3f));
+                        break;
+                    }
+
+                    string flagId = parts[1];
+                    if (parts.Length == 2)
+                    {
+                        LogMessage($"flag '{flagId}' = {flags.GetFlag(flagId)}", new Color(0.3f, 0.9f, 0.3f));
+                    }
+                    else if (!bool.TryParse(parts[2], out bool flagValue))
+                    {
+                        LogMessage($"Could not parse '{parts[2]}' as true|false.", new Color(0.9f, 0.3f, 0.3f));
+                    }
+                    else
+                    {
+                        flags.SetFlag(flagId, flagValue);
+                        LogMessage($"flag '{flagId}' set to {flagValue}", new Color(0.3f, 0.9f, 0.3f));
+                    }
+                    break;
+                }
+
+                case "action":
+                {
+                    var dispatcher = new ActionDispatcher();
+                    if (parts.Length < 2)
+                    {
+                        LogMessage("Usage: action <verb> [args...]. Registered verbs:");
+                        foreach (var usage in dispatcher.UsageLines)
+                        {
+                            LogMessage($"  {usage}");
+                        }
+                        break;
+                    }
+
+                    string verb = parts[1];
+                    var actionArgs = new List<string>(parts.Length - 2);
+                    for (int i = 2; i < parts.Length; i++)
+                    {
+                        actionArgs.Add(parts[i]);
+                    }
+
+                    // Real engine seams for the two scene-bound effects (§10.4): teleport_player moves
+                    // the possessed body's global transform; spawn_scene instantiates under the live
+                    // current scene. Kept local to this construction site so ServicesActionContext
+                    // itself stays engine-free (§3.5).
+                    var actionContext = new ServicesActionContext(
+                        warn: msg => LogMessage($"  {msg}", new Color(0.9f, 0.7f, 0.3f)),
+                        teleport: (x, y, z) =>
+                        {
+                            if (Services.TryGet<IPlayerController>(out var pc) && pc?.PossessedEntity is Node3D body)
+                            {
+                                body.GlobalPosition = new Vector3(x, y, z);
+                            }
+                            else
+                            {
+                                LogMessage("  TeleportPlayer dropped: nothing possessed.", new Color(0.9f, 0.7f, 0.3f));
+                            }
+                        },
+                        spawnScene: (scenePath, x, y, z) =>
+                        {
+                            var packed = ResourceLoader.Load<PackedScene>(scenePath);
+                            if (packed == null)
+                            {
+                                return false;
+                            }
+
+                            var instantiated = packed.Instantiate();
+                            if (instantiated is not Node3D node)
+                            {
+                                instantiated?.QueueFree();
+                                return false;
+                            }
+
+                            var currentScene = GetTree().CurrentScene;
+                            if (currentScene == null)
+                            {
+                                node.QueueFree();
+                                return false;
+                            }
+
+                            currentScene.AddChild(node);
+                            node.GlobalPosition = new Vector3(x, y, z);
+                            return true;
+                        });
+
+                    if (dispatcher.TryDispatch(verb, actionArgs, actionContext, out string dispatchError))
+                    {
+                        LogMessage($"Dispatched '{verb}'.", new Color(0.3f, 0.9f, 0.3f));
+                    }
+                    else
+                    {
+                        LogMessage($"Action failed: {dispatchError}", new Color(0.9f, 0.3f, 0.3f));
+                    }
+                    break;
+                }
 
                 case "validate-content":
                 {

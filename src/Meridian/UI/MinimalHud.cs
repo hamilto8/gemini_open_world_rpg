@@ -11,17 +11,25 @@ namespace Meridian.UI;
 /// </summary>
 public partial class MinimalHud : Control
 {
+    /// <summary>How long a transient notice ("Pack is full") stays on screen.</summary>
+    private const float NoticeSeconds = 2.5f;
+
     private ProgressBar? _healthBar;
     private ProgressBar? _staminaBar;
     private TextureRect? _reticle;
     private Label? _interactPrompt;
     private Label? _ammoLabel;
+    private Label? _noticeLabel;
 
     private IDisposable? _focusSubscription;
     private IDisposable? _deviceSubscription;
     private IDisposable? _ammoSubscription;
     private IDisposable? _equipSubscription;
+    private IDisposable? _noticeSubscription;
     private Meridian.Player.InteractionFocusChangedEvent _currentFocus;
+
+    // Monotonic id so an older notice's hide-timer can't blank a newer notice.
+    private int _noticeSequence;
 
     public override void _Ready()
     {
@@ -53,6 +61,9 @@ public partial class MinimalHud : Control
             _ammoLabel = new Label { Name = "AmmoLabel", Text = "", Visible = false };
             container.AddChild(_ammoLabel);
 
+            _noticeLabel = new Label { Name = "NoticeLabel", Text = "", Visible = false };
+            container.AddChild(_noticeLabel);
+
             // Center crosshair reticle (aim)
             _reticle = new TextureRect
             {
@@ -74,6 +85,7 @@ public partial class MinimalHud : Control
         _deviceSubscription = eventBus.Subscribe<InputDeviceChangedEvent>(_ => RenderInteractPrompt());
         _ammoSubscription = eventBus.Subscribe<Meridian.Combat.WeaponAmmoChangedEvent>(OnAmmoChanged);
         _equipSubscription = eventBus.Subscribe<Meridian.Combat.WeaponEquippedEvent>(OnWeaponEquipped);
+        _noticeSubscription = eventBus.Subscribe<HudNoticeEvent>(OnHudNotice);
     }
 
     public override void _ExitTree()
@@ -82,6 +94,26 @@ public partial class MinimalHud : Control
         _deviceSubscription?.Dispose();
         _ammoSubscription?.Dispose();
         _equipSubscription?.Dispose();
+        _noticeSubscription?.Dispose();
+    }
+
+    private void OnHudNotice(HudNoticeEvent ev)
+    {
+        if (_noticeLabel == null) return;
+
+        _noticeLabel.Text = ev.Message;
+        _noticeLabel.Visible = true;
+
+        int sequence = ++_noticeSequence;
+        GetTree().CreateTimer(NoticeSeconds).Timeout += () =>
+        {
+            // Only the newest notice may clear the label; IsInstanceValid guards the freed-node case
+            // (SceneTreeTimer callbacks outlive _ExitTree — the L5 timer-lifetime lesson).
+            if (IsInstanceValid(this) && sequence == _noticeSequence && _noticeLabel != null)
+            {
+                _noticeLabel.Visible = false;
+            }
+        };
     }
 
     private void OnWeaponEquipped(Meridian.Combat.WeaponEquippedEvent ev)

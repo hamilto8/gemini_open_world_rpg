@@ -42,6 +42,15 @@ public sealed class VehicleMotorModel
     /// <summary>Current steering angle in degrees (clamped to the profile's limit).</summary>
     public float SteeringAngle { get; private set; }
 
+    /// <summary>
+    /// Body yaw rate about +Y in radians/second, from the kinematic bicycle model (§11.1).
+    /// Positive turns counter-clockwise seen from above (left), matching Godot's <c>RotateY</c>;
+    /// the leading minus makes a right steer (positive) turn the body right while moving forward,
+    /// and reversing (negative <see cref="Speed"/>) flips the turn direction naturally. Zero speed
+    /// or a non-positive wheelbase yields zero — no spinning in place.
+    /// </summary>
+    public float YawRateRadians { get; private set; }
+
     /// <summary>Advances the model by <paramref name="delta"/> seconds under <paramref name="input"/>.</summary>
     public void Step(VehicleInput input, float delta)
     {
@@ -76,6 +85,28 @@ public sealed class VehicleMotorModel
         if (input.Brake)
         {
             Speed = MoveToward(Speed, 0f, _profile.BrakingStrength * delta);
+        }
+
+        // Yaw rate from the kinematic bicycle model, using Speed AFTER this frame's update so heading
+        // tracks the body's actual motion. Guard a degenerate wheelbase (<= 0) as no yaw. (§11.1)
+        float wheelbase = _profile.Wheelbase;
+        if (wheelbase > 0f)
+        {
+            float steerRadians = SteeringAngle * (MathF.PI / 180f);
+            YawRateRadians = -(Speed / wheelbase) * MathF.Tan(steerRadians);
+
+            // Grip proxy: lateral acceleration is |v·ω|, so cap |ω| at a_lat_max / |v|. Full-lock
+            // geometry rules at parking speeds; at speed the arc widens like a tire losing the fight
+            // (raw full lock at top speed would otherwise whip the body around in a ~3 m radius).
+            if (_profile.MaxLateralAcceleration > 0f && Speed != 0f)
+            {
+                float maxYaw = _profile.MaxLateralAcceleration / Math.Abs(Speed);
+                YawRateRadians = Math.Clamp(YawRateRadians, -maxYaw, maxYaw);
+            }
+        }
+        else
+        {
+            YawRateRadians = 0f;
         }
     }
 

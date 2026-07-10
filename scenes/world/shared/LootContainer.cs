@@ -1,20 +1,23 @@
 using Godot;
 using System.Collections.Generic;
 using Meridian.Core;
+using Meridian.Core.Registry;
+using Meridian.Data;
 using Meridian.Items;
 using Meridian.World;
 
 namespace Meridian.Scenes.World;
 
 /// <summary>
-/// A lootable container: grants materials once, then reports as looted. Implements
-/// <see cref="IPersistentSceneObject"/> so its open state survives streaming/save (M13, doc §4.3/§16).
+/// A lootable container: rolls a data-driven <see cref="LootTableResource"/> once, then reports as looted.
+/// Implements <see cref="IPersistentSceneObject"/> so its open state survives streaming/save (M13, doc
+/// §4.3/§16). The loot table and its item drops are authored data resolved from <see cref="IContentDatabase"/>
+/// by id (§7.4, §19.1); the exported id is the only scene-tunable surface.
 /// </summary>
 public partial class LootContainer : StaticBody3D, IInteractable, IPersistentSceneObject
 {
     [Export] public string PersistentIdValue { get; set; } = "container_start";
-    [Export] public string LootItemId { get; set; } = "metal_scrap";
-    [Export] public int LootAmount { get; set; } = 5;
+    [Export] public string LootTableId { get; set; } = "supply_crate";
     [Export] public MeshInstance3D? Lid { get; set; }
 
     private bool _isOpen;
@@ -29,22 +32,51 @@ public partial class LootContainer : StaticBody3D, IInteractable, IPersistentSce
     public void Interact(Node3D interactor)
     {
         if (_isOpen) return;
-        _isOpen = true;
-        ApplyOpenVisual();
 
-        if (Services.TryGet<IInventoryProvider>(out var provider) && provider != null)
+        if (!Services.TryGet<IInventoryProvider>(out var provider) || provider == null) return;
+
+        // Resolve the loot table from the registry rather than constructing drops inline. Missing database
+        // or unknown id is a data error: warn loudly and stay closed (the ContentValidator catches it at
+        // authoring time, §19.1).
+        if (!Services.TryGet<IContentDatabase>(out var content) || content == null)
         {
-            provider.Inventory.RegisterDefinition(new Meridian.Data.ItemResource
-            {
-                Id = LootItemId,
-                DisplayName = LootItemId,
-                MaxStack = 999,
-                Weight = 0.1f,
-            });
-            provider.Inventory.AddItem(new ItemInstance(LootItemId, LootAmount));
+            GD.PushWarning("[LootContainer] No IContentDatabase registered; cannot resolve loot table.");
+            return;
         }
 
-        GD.Print($"[Container] Looted {LootAmount}x {LootItemId}.");
+        if (!content.LootTables.TryGet(LootTableId, out var table) || table is not LootTableResource lootTable)
+        {
+            GD.PushWarning($"[LootContainer] Unknown loot table id '{LootTableId}'; not in the LootTables registry.");
+            return;
+        }
+
+        // Roll one weighted drop. Random.Shared keeps this allocation-free (M7); a single-entry test table
+        // is effectively deterministic (§7.4).
+        var (itemId, quantity) = lootTable.RollDrop();
+        if (string.IsNullOrEmpty(itemId) || quantity <= 0)
+        {
+            GD.PushWarning($"[LootContainer] Loot table '{LootTableId}' produced no drop; nothing granted.");
+            return;
+        }
+
+        if (!content.Items.TryGet(itemId, out var definition) || definition == null)
+        {
+            GD.PushWarning($"[LootContainer] Loot table '{LootTableId}' rolled unknown item '{itemId}'.");
+            return;
+        }
+
+        // Latch open only after the loot actually lands — a full pack (or missing inventory) must not
+        // mark the crate looted and destroy its contents (finding: pickups discarded items on failure).
+        provider.Inventory.RegisterDefinition(definition);
+        if (!provider.Inventory.AddItem(new ItemInstance(itemId, quantity)))
+        {
+            WeaponPickup.PublishNotice($"Pack is full — can't carry {quantity}x {itemId}.");
+            return;
+        }
+
+        _isOpen = true;
+        ApplyOpenVisual();
+        GD.Print($"[Container] Looted {quantity}x {itemId}.");
     }
 
     private void ApplyOpenVisual()

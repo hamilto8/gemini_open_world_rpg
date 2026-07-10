@@ -1,6 +1,7 @@
-[gd_scene load_steps=8 format=3 uid="uid://dprop_buggy"]
+[gd_scene load_steps=9 format=3 uid="uid://dprop_buggy"]
 
 [ext_resource type="Script" path="res://src/Meridian/Vehicles/VehicleAvatar.cs" id="1_script"]
+[ext_resource type="Resource" path="res://data/vehicles/handling/default_buggy.tres" id="2_handling"]
 
 [sub_resource type="BoxShape3D" id="col"]
 size = Vector3(1.8, 1.2, 3.4)
@@ -33,6 +34,7 @@ radial_segments = 20
 
 [node name="TestBuggy" type="CharacterBody3D"]
 script = ExtResource("1_script")
+ProfileResource = ExtResource("2_handling")
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.6, 0)

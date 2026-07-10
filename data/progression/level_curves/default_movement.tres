@@ -4,6 +4,7 @@
 
 [resource]
 script = ExtResource("1_script")
+Id = "default_movement"
 WalkSpeed = 2.5
 RunSpeed = 5.0
 CrouchSpeed = 1.5

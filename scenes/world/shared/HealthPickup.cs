@@ -15,17 +15,23 @@ public partial class HealthPickup : StaticBody3D, IInteractable
 
     public void Interact(Node3D interactor)
     {
-        if (Services.TryGet<IPlayerController>(out var pc) && pc?.PossessedEntity is Node avatar)
+        // Consume the medkit only when it actually heals — freeing it with no possessed avatar, no
+        // StatBlock, or at full health destroys it for nothing (same class as the pickup-loss finding).
+        if (!Services.TryGet<IPlayerController>(out var pc) || pc?.PossessedEntity is not Node avatar) return;
+
+        var stats = avatar.GetNodeOrNull<StatBlockNode>("StatBlock");
+        if (stats == null) return;
+
+        float health = stats.GetStat("health");
+        float maxHealth = stats.GetStat("max_health");
+        if (health >= maxHealth)
         {
-            var stats = avatar.GetNodeOrNull<StatBlockNode>("StatBlock");
-            if (stats != null)
-            {
-                float health = stats.GetStat("health");
-                float maxHealth = stats.GetStat("max_health");
-                stats.SetBaseStat("health", Mathf.Min(maxHealth, health + HealAmount));
-                GD.Print($"[Pickup] Healed +{HealAmount}.");
-            }
+            WeaponPickup.PublishNotice("Health already full.");
+            return;
         }
+
+        stats.SetBaseStat("health", Mathf.Min(maxHealth, health + HealAmount));
+        GD.Print($"[Pickup] Healed +{HealAmount}.");
         QueueFree();
     }
 }

@@ -1,0 +1,16 @@
+[gd_resource type="Resource" script_class="WeaponResource" load_steps=2 format=3 uid="uid://weapon_test_pistol"]
+
+[ext_resource type="Script" path="res://src/Meridian/Data/WeaponResource.cs" id="1_script"]
+
+[resource]
+script = ExtResource("1_script")
+Id = "test_pistol"
+DisplayName = "Test Pistol"
+Description = "Reliable sidearm used for range testing."
+BaseDamage = 25.0
+DamageTypeId = "physical"
+FireRate = 6.0
+MaxRange = 120.0
+AmmoTypeId = "ammo_9mm"
+MagazineSize = 12
+ReloadTime = 1.5

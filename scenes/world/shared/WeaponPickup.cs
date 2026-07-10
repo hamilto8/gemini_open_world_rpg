@@ -1,25 +1,23 @@
 using Godot;
 using Meridian.Combat;
 using Meridian.Core;
-using Meridian.Data;
+using Meridian.Core.Registry;
 using Meridian.Items;
 
 namespace Meridian.Scenes.World;
 
 /// <summary>
 /// World interactable that equips a weapon (and stocks starting reserve ammo) on interact.
-/// Builds a <see cref="WeaponResource"/> from exported fields so the test world needs no authored .tres.
+/// Resolves its weapon/ammo/stash <see cref="IWeaponDefinition"/>/<see cref="IItemDefinition"/> from the
+/// data-driven <see cref="IContentDatabase"/> by id (§19.1) — the exported ids are the only scene-tunable
+/// surface; the stats live in authored .tres. A missing database or unknown id is a data error surfaced
+/// loudly (the ContentValidator catches it at authoring time), and the pickup stays in the world.
 /// </summary>
 public partial class WeaponPickup : StaticBody3D, IInteractable
 {
     [Export] public string WeaponId { get; set; } = "test_pistol";
     [Export] public string WeaponName { get; set; } = "Test Pistol";
-    [Export] public float BaseDamage { get; set; } = 25f;
-    [Export] public float FireRate { get; set; } = 6f;
-    [Export] public float MaxRange { get; set; } = 120f;
     [Export] public string AmmoTypeId { get; set; } = "ammo_9mm";
-    [Export] public int MagazineSize { get; set; } = 12;
-    [Export] public float ReloadTime { get; set; } = 1.5f;
     [Export] public int StartingReserveAmmo { get; set; } = 48;
 
     public string ObjectName => WeaponName;
@@ -35,59 +33,80 @@ public partial class WeaponPickup : StaticBody3D, IInteractable
             return;
         }
 
-        var definition = new WeaponResource
+        // Weapon/item definitions are authored data now; resolve from the registry instead of building them
+        // inline. Missing database or unknown id → warn and leave the pickup in the world (data error).
+        if (!Services.TryGet<IContentDatabase>(out var content) || content == null)
         {
-            Id = WeaponId,
-            DisplayName = WeaponName,
-            BaseDamage = BaseDamage,
-            FireRate = FireRate,
-            MaxRange = MaxRange,
-            AmmoTypeId = AmmoTypeId,
-            MagazineSize = MagazineSize,
-            ReloadTime = ReloadTime,
-        };
+            GD.PushWarning("[WeaponPickup] No IContentDatabase registered; cannot resolve weapon definitions.");
+            return;
+        }
+
+        if (!content.Weapons.TryGet(WeaponId, out var definition) || definition == null)
+        {
+            GD.PushWarning($"[WeaponPickup] Unknown weapon id '{WeaponId}'; not in the Weapons registry.");
+            return;
+        }
 
         Services.TryGet<IInventoryProvider>(out var provider);
 
-        // Register the ammo item type and stock some reserves so reloading works.
-        if (provider != null)
-        {
-            provider.Inventory.RegisterDefinition(MakeAmmoDefinition(AmmoTypeId));
-            if (StartingReserveAmmo > 0)
-            {
-                provider.Inventory.AddItem(new ItemInstance(AmmoTypeId, StartingReserveAmmo));
-            }
-        }
+        var instance = new WeaponInstance(WeaponId + "_item", WeaponId) { CurrentAmmo = definition.MagazineSize };
 
-        var instance = new WeaponInstance(WeaponId + "_item", WeaponId) { CurrentAmmo = MagazineSize };
-
-        // Auto-equip only when unarmed; otherwise stash the weapon in the pack (no swap UI yet).
+        // Acquire the weapon first; bundled reserve ammo is only granted once the weapon itself
+        // landed. Auto-equip only when unarmed; otherwise stash it in the pack (no swap UI yet).
         if (provider?.EquippedWeapon == null)
         {
             holder.EquipWeapon(instance, definition);
-            GD.Print($"[Pickup] Equipped {WeaponName} (+{StartingReserveAmmo} {AmmoTypeId}).");
+            GD.Print($"[Pickup] Equipped {WeaponName}.");
         }
-        else if (provider != null)
+        else
         {
-            provider.Inventory.RegisterDefinition(new ItemResource
+            if (!content.Items.TryGet(instance.DefinitionId, out var stashDefinition) || stashDefinition == null)
             {
-                Id = instance.DefinitionId,
-                DisplayName = WeaponName,
-                MaxStack = 1,
-                Weight = 3.0f,
-            });
-            provider.Inventory.AddItem(instance);
+                GD.PushWarning($"[WeaponPickup] Unknown stash item id '{instance.DefinitionId}'; not in the Items registry.");
+                return;
+            }
+
+            provider.Inventory.RegisterDefinition(stashDefinition);
+            if (!provider.Inventory.AddItem(instance))
+            {
+                // A full pack must not destroy the weapon — leave the pickup in the world.
+                PublishNotice($"Pack is full — can't carry the {WeaponName}.");
+                return;
+            }
             GD.Print($"[Pickup] Already armed — stored {WeaponName} in the pack.");
+        }
+
+        // Stock reserve ammo so reloading works. The weapon is already taken at this point, so an
+        // over-weight failure here only forfeits the bonus ammo (the pickup node is consumed either way).
+        if (provider != null && StartingReserveAmmo > 0)
+        {
+            if (!content.Items.TryGet(AmmoTypeId, out var ammoDefinition) || ammoDefinition == null)
+            {
+                GD.PushWarning($"[WeaponPickup] Unknown ammo id '{AmmoTypeId}'; reserve ammo not granted.");
+            }
+            else
+            {
+                provider.Inventory.RegisterDefinition(ammoDefinition);
+                if (provider.Inventory.AddItem(new ItemInstance(AmmoTypeId, StartingReserveAmmo)))
+                {
+                    GD.Print($"[Pickup] +{StartingReserveAmmo} {AmmoTypeId}.");
+                }
+                else
+                {
+                    PublishNotice($"Pack is full — left the spare {AmmoTypeId} behind.");
+                }
+            }
         }
 
         QueueFree();
     }
 
-    internal static ItemResource MakeAmmoDefinition(string ammoId) => new()
+    /// <summary>Publishes a transient HUD toast (shared by the pickup/container interactables).</summary>
+    internal static void PublishNotice(string message)
     {
-        Id = ammoId,
-        DisplayName = ammoId,
-        MaxStack = 999,
-        Weight = 0.01f,
-    };
+        if (Services.TryGet<IEventBus>(out var eventBus) && eventBus != null)
+        {
+            eventBus.Publish(new HudNoticeEvent(message));
+        }
+    }
 }

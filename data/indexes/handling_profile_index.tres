@@ -1,0 +1,8 @@
+[gd_resource type="Resource" script_class="HandlingProfileIndex" load_steps=3 format=3 uid="uid://index_handling_profiles"]
+
+[ext_resource type="Script" path="res://src/Meridian/Data/Indexes/HandlingProfileIndex.cs" id="1_script"]
+[ext_resource type="Resource" path="res://data/vehicles/handling/default_buggy.tres" id="2_default_buggy"]
+
+[resource]
+script = ExtResource("1_script")
+Definitions = Array[Resource]([ExtResource("2_default_buggy")])

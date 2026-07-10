@@ -58,6 +58,8 @@ public partial class VehicleAvatar : CharacterBody3D, IPossessable, IInteractabl
                 SteeringLimit = 35.0f,
                 BrakingStrength = 24.0f,
                 FuelBurnRate = 1.0f,
+                Wheelbase = 2.6f,
+                MaxLateralAcceleration = 9.0f,
             };
         }
         InitializeMotor();
@@ -181,6 +183,10 @@ public partial class VehicleAvatar : CharacterBody3D, IPossessable, IInteractabl
             Brake: _lastInput.BrakeHeld);
 
         _motor.Step(motorInput, (float)delta);
+
+        // Turn the body first so its transform stays the single source of heading (collision-safe);
+        // the forward vector below is read from the updated basis. Zero speed → zero yaw (§11.1).
+        RotateY(_motor.YawRateRadians * (float)delta);
 
         // Integrate as a physics body: forward motion from the motor, gravity when airborne.
         Vector3 forward = -GlobalTransform.Basis.Z;

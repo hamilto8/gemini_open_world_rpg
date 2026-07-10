@@ -1,0 +1,13 @@
+[gd_resource type="Resource" script_class="ItemResource" load_steps=2 format=3 uid="uid://item_ammo_9mm"]
+
+[ext_resource type="Script" path="res://src/Meridian/Data/ItemResource.cs" id="1_script"]
+
+[resource]
+script = ExtResource("1_script")
+Id = "ammo_9mm"
+DisplayName = "9mm Ammo"
+Description = "Standard pistol cartridges."
+IconPath = ""
+MaxStack = 999
+Weight = 0.01
+BaseValue = 1

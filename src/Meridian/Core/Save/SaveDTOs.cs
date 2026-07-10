@@ -62,6 +62,31 @@ public record QuestSaveDto(
     Dictionary<string, Dictionary<string, int>> ObjectiveProgress
 );
 
+/// <summary>
+/// A runtime-spawned object (dropped item, parked vehicle) recorded per cell so streaming can
+/// recreate it on reload — authored objects only need deltas re-applied, dynamic ones need a scene
+/// to respawn from (doc §4.3). Engine-free primitives: vectors are decomposed like PlayerStateDto.
+/// </summary>
+public record DynamicObjectRecordDto(
+    string PersistentId,
+    string ScenePath,
+    float PosX, float PosY, float PosZ,
+    float RotY,
+    Dictionary<string, string> State
+);
+
+/// <summary>Per-cell world state: authored-object deltas plus runtime-spawned object records.</summary>
+public record CellStateDto(
+    Dictionary<string, string> ObjectDeltas,
+    List<DynamicObjectRecordDto> DynamicObjects
+);
+
+/// <summary>
+/// WorldStateStore DTO — the §16.1 "DynamicObjects" consequence-memory module, keyed by cell id.
+/// Replaces the earlier reuse of <see cref="WorldFlagsDto"/> (which belongs to the flags participant).
+/// </summary>
+public record WorldStateDto(Dictionary<string, CellStateDto> Cells);
+
 [JsonSourceGenerationOptions(WriteIndented = true)]
 [JsonSerializable(typeof(GameSaveData))]
 [JsonSerializable(typeof(SaveHeaderDto))]
@@ -69,6 +94,11 @@ public record QuestSaveDto(
 [JsonSerializable(typeof(WorldFlagsDto))]
 [JsonSerializable(typeof(TimeWeatherDto))]
 [JsonSerializable(typeof(QuestSaveDto))]
+[JsonSerializable(typeof(WorldStateDto))]
+[JsonSerializable(typeof(CellStateDto))]
+[JsonSerializable(typeof(DynamicObjectRecordDto))]
+[JsonSerializable(typeof(Dictionary<string, CellStateDto>))]
+[JsonSerializable(typeof(List<DynamicObjectRecordDto>))]
 [JsonSerializable(typeof(Dictionary<string, string>))]
 [JsonSerializable(typeof(Dictionary<string, int>))]
 [JsonSerializable(typeof(Dictionary<string, Dictionary<string, int>>))]

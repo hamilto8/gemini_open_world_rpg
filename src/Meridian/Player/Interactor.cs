@@ -1,55 +1,41 @@
 using Godot;
-using System;
 using Meridian.Core;
 
 namespace Meridian.Player;
 
 /// <summary>
-/// Interaction raycast/shape query component attached to the player character.
-/// Detects IInteractable props and executes interaction actions.
-/// Enforces Section 14.1 requirements.
+/// Interaction query component. Casts a short ray from the player's chest along the camera's
+/// horizontal facing and focuses the nearest <see cref="IInteractable"/>. The manual space query
+/// (rather than the built-in RayCast3D ray) keeps it independent of the SpringArm3D that repositions
+/// the camera rig's children. Enforces Section 14.1 requirements.
 /// </summary>
 public partial class Interactor : RayCast3D
 {
-    private Node3D? _owner;
+    /// <summary>How far in front of the player (metres) an interactable can be reached.</summary>
+    [Export] public float Reach { get; set; } = 3.0f;
+
+    /// <summary>Ray origin height above the player's feet (chest level).</summary>
+    [Export] public float ChestHeight { get; set; } = 1.2f;
+
+    private Node3D? _player;
     private IInteractable? _focusedInteractable;
 
     public IInteractable? FocusedInteractable => _focusedInteractable;
 
     public override void _Ready()
     {
-        _owner = GetParentOrNull<Node3D>();
-        
-        // Target raycast length (e.g. 2.5 meters)
-        TargetPosition = new Vector3(0, 0, -2.5f);
-        Enabled = true;
-        CollideWithAreas = true;
-        CollideWithBodies = true;
+        // The rig (parent) is repositioned by the SpringArm; use the actual player body for the origin.
+        _player = GetParentOrNull<Node3D>()?.GetParentOrNull<Node3D>();
+        Enabled = false; // we run our own query in _PhysicsProcess
     }
 
     public override void _PhysicsProcess(double delta)
     {
-        if (_owner == null) return;
-
-        IInteractable? found = null;
-        if (IsColliding())
-        {
-            var collider = GetCollider();
-            if (collider is IInteractable interactable && interactable.CanInteract(_owner))
-            {
-                found = interactable;
-            }
-            // Check parent in case the collision shape is nested
-            else if (collider is Node node && node.GetParent() is IInteractable parentInteractable && parentInteractable.CanInteract(_owner))
-            {
-                found = parentInteractable;
-            }
-        }
+        IInteractable? found = QueryInteractable();
 
         if (found != _focusedInteractable)
         {
             _focusedInteractable = found;
-            // Notify UI layer / broadcast interaction target change
             if (Services.TryGet<IEventBus>(out var eventBus) && eventBus != null)
             {
                 eventBus.Publish(new InteractionFocusChangedEvent(_focusedInteractable?.ActionPrompt, _focusedInteractable?.ObjectName));
@@ -57,12 +43,49 @@ public partial class Interactor : RayCast3D
         }
     }
 
+    private IInteractable? QueryInteractable()
+    {
+        if (_player == null) return null;
+
+        Camera3D? camera = GetViewport().GetCamera3D();
+        Vector3 facing = camera != null ? -camera.GlobalTransform.Basis.Z : -_player.GlobalTransform.Basis.Z;
+        facing.Y = 0f;
+        if (facing.LengthSquared() < 0.0001f) return null;
+        facing = facing.Normalized();
+
+        Vector3 origin = _player.GlobalPosition + new Vector3(0f, ChestHeight, 0f);
+        Vector3 end = origin + facing * Reach;
+
+        var query = PhysicsRayQueryParameters3D.Create(origin, end);
+        query.CollideWithAreas = true;
+        query.CollideWithBodies = true;
+        if (_player is CollisionObject3D playerBody)
+        {
+            query.Exclude = new Godot.Collections.Array<Rid> { playerBody.GetRid() };
+        }
+
+        var result = GetWorld3D().DirectSpaceState.IntersectRay(query);
+        if (result.Count == 0) return null;
+
+        var collider = result["collider"].As<Node>();
+        if (collider is IInteractable interactable && interactable.CanInteract(_player))
+        {
+            return interactable;
+        }
+        if (collider is Node node && node.GetParentOrNull<Node>() is IInteractable parentInteractable
+            && parentInteractable.CanInteract(_player))
+        {
+            return parentInteractable;
+        }
+        return null;
+    }
+
     public void TryInteract()
     {
-        if (_owner == null || _focusedInteractable == null) return;
-        
+        if (_player == null || _focusedInteractable == null) return;
+
         GD.Print($"[Interactor] Interacting with: {_focusedInteractable.ObjectName}");
-        _focusedInteractable.Interact(_owner);
+        _focusedInteractable.Interact(_player);
     }
 }
 

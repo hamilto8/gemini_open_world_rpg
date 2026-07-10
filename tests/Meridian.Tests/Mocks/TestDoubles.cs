@@ -35,6 +35,50 @@ namespace Meridian.Data
         public float SteeringLimit { get; set; } = 40.0f;
         public float BrakingStrength { get; set; } = 15.0f;
         public float FuelBurnRate { get; set; } = 2.0f;
+        public float Wheelbase { get; set; } = 2.6f;
+        public float MaxLateralAcceleration { get; set; } = 9.0f;
+    }
+
+    /// <summary>Pure C# ILootTableDefinition used by registry/validator tests.</summary>
+    public class BasicLootTableDefinition : ILootTableDefinition
+    {
+        public string Id { get; set; } = "";
+        public IReadOnlyList<string> ItemIds { get; set; } = new List<string>();
+
+        public BasicLootTableDefinition(string id, params string[] itemIds)
+        {
+            Id = id;
+            ItemIds = new List<string>(itemIds);
+        }
+    }
+
+    /// <summary>Pure C# IRegionDefinition used by registry/validator tests.</summary>
+    public class BasicRegionDefinition : IRegionDefinition
+    {
+        public string Id { get; set; } = "";
+        public IReadOnlyList<string> CellScenePaths { get; set; } = new List<string>();
+
+        public BasicRegionDefinition(string id, params string[] cellScenePaths)
+        {
+            Id = id;
+            CellScenePaths = new List<string>(cellScenePaths);
+        }
+    }
+
+    /// <summary>Pure C# IWeatherProfile used by registry/validator tests.</summary>
+    public class BasicWeatherProfile : IWeatherProfile
+    {
+        public string Id { get; set; } = "clear";
+
+        public BasicWeatherProfile(string id) => Id = id;
+    }
+
+    /// <summary>Pure C# IMovementProfile used by registry/validator tests.</summary>
+    public class BasicMovementProfile : IMovementProfile
+    {
+        public string Id { get; set; } = "";
+
+        public BasicMovementProfile(string id) => Id = id;
     }
 }
 

@@ -46,7 +46,12 @@ public partial class WorldStreamerNode : Node, IWorldStreamer
     private readonly Dictionary<Vector2I, CellState> _cellStates = new();
     private readonly Dictionary<Vector2I, Node> _instancedCells = new();
     private readonly Dictionary<Vector2I, CellDefinition> _cellsByGrid = new();
+    private readonly Dictionary<Vector2I, List<Node3D>> _dynamicByCell = new();
     private readonly WorldStateStore _stateStore = new();
+
+    // World-flags store: the game's consequence memory. Grouped with world state (§16.1), so the streamer
+    // owns it, publishes it as a shared service, and enrolls it as a save participant alongside _stateStore.
+    private readonly WorldFlagsService _worldFlags = new();
 
     private ICellLoader? _loader;
     private Node3D? _player;
@@ -72,17 +77,38 @@ public partial class WorldStreamerNode : Node, IWorldStreamer
         // Default Godot runtime loader
         _loader = new GodotCellLoader();
 
+        // Saves must see cells that are still loaded (deltas are otherwise flushed only on unload),
+        // and a loaded save must rebuild instanced cells from the restored records.
+        _stateStore.LiveStateProvider = SnapshotLiveCells;
+        _stateStore.StateRestored += OnWorldStateRestored;
+
+        // Publish the flag store so conditions, actions, dialogue, and quests share one namespace (§16.1).
+        Services.Register<IWorldFlags>(_worldFlags);
+
         if (Services.TryGet<ISaveService>(out var saveService) && saveService != null)
         {
             saveService.RegisterParticipant(_stateStore);
+            // Flags restore first (RestoreOrder 10) so later modules can read them during their own restore.
+            saveService.RegisterParticipant(_worldFlags);
         }
     }
 
     public override void _ExitTree()
     {
+        _stateStore.LiveStateProvider = null;
+        _stateStore.StateRestored -= OnWorldStateRestored;
+
         if (Services.TryGet<ISaveService>(out var saveService) && saveService != null)
         {
             saveService.UnregisterParticipant(_stateStore);
+            saveService.UnregisterParticipant(_worldFlags);
+        }
+
+        // Symmetric with the _Ready registration; guard against clobbering a different instance (mirrors
+        // the IWorldStreamer unregister below).
+        if (Services.TryGet<IWorldFlags>(out var flags) && ReferenceEquals(flags, _worldFlags))
+        {
+            Services.Unregister<IWorldFlags>();
         }
 
         if (Services.TryGet<IWorldStreamer>(out var current) && ReferenceEquals(current, this))
@@ -252,27 +278,178 @@ public partial class WorldStreamerNode : Node, IWorldStreamer
         {
             ApplyCellDeltas(cellNode, deltas);
         }
+
+        // Respawn runtime-spawned objects (dropped items, parked vehicles) recorded for this cell.
+        SpawnDynamicObjects(gridPos, cellNode);
     }
 
-    private void UnloadCell(Vector2I gridPos)
+    private void UnloadCell(Vector2I gridPos) => UnloadCell(gridPos, capture: true);
+
+    private void UnloadCell(Vector2I gridPos, bool capture)
     {
         if (_instancedCells.TryGetValue(gridPos, out var cellNode))
         {
-            // Capture dynamic-object state before freeing (Section 4.3).
-            _stateStore.SaveCellState(CellKey(gridPos), CaptureCellDeltas(cellNode));
-            cellNode.QueueFree();
+            if (capture)
+            {
+                // Capture authored deltas + dynamic-object records before freeing (Section 4.3).
+                string cellKey = CellKey(gridPos);
+                _stateStore.SaveCellState(cellKey, CaptureCellDeltas(cellNode));
+                _stateStore.SaveCellDynamicObjects(cellKey, CaptureDynamicRecords(gridPos));
+            }
+            cellNode.QueueFree(); // dynamic objects are children of the cell root and free with it
             _instancedCells.Remove(gridPos);
+            _dynamicByCell.Remove(gridPos);
         }
         _cellStates[gridPos] = CellState.Unloaded;
+    }
+
+    private void OnWorldStateRestored()
+    {
+        // A loaded save owns the truth now: drop live cells WITHOUT capturing (that would overwrite
+        // the restored records with pre-load scene state) and let _Process stream them back in with
+        // the restored deltas and dynamic objects applied. Also resets deltas the save never had.
+        foreach (var gridPos in new List<Vector2I>(_instancedCells.Keys))
+        {
+            UnloadCell(gridPos, capture: false);
+        }
+    }
+
+    /// <inheritdoc/>
+    public void RegisterDynamicObject(Node3D node)
+    {
+        if (node is not IDynamicSceneObject)
+        {
+            GD.PushWarning($"[WorldStreamer] '{node?.Name}' does not implement IDynamicSceneObject — not registered.");
+            return;
+        }
+
+        Vector2I gridPos = WorldToGrid(node.GlobalPosition);
+        if (!_instancedCells.TryGetValue(gridPos, out var cellRoot))
+        {
+            GD.PushWarning($"[WorldStreamer] No instanced cell at {gridPos} for dynamic object '{node.Name}' — not registered.");
+            return;
+        }
+
+        // Parent under the owning cell so the node's lifetime follows the cell's (frees on unload).
+        if (node.GetParent() == null)
+        {
+            cellRoot.AddChild(node);
+        }
+        else if (node.GetParent() != cellRoot)
+        {
+            node.Reparent(cellRoot);
+        }
+
+        if (!_dynamicByCell.TryGetValue(gridPos, out var tracked))
+        {
+            tracked = new List<Node3D>();
+            _dynamicByCell[gridPos] = tracked;
+        }
+        if (!tracked.Contains(node))
+        {
+            tracked.Add(node);
+        }
+    }
+
+    /// <inheritdoc/>
+    public bool UnregisterDynamicObject(Node3D node)
+    {
+        foreach (var tracked in _dynamicByCell.Values)
+        {
+            if (tracked.Remove(node))
+            {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private Vector2I WorldToGrid(Vector3 position)
+    {
+        // Inverse of CellCenter: cell (x, y) spans [x·size, (x+1)·size) on each axis.
+        float cellSize = ActiveRegion?.CellSize ?? 1f;
+        return new Vector2I(
+            (int)Mathf.Floor(position.X / cellSize),
+            (int)Mathf.Floor(position.Z / cellSize));
+    }
+
+    private IEnumerable<WorldStateStore.LiveCellState> SnapshotLiveCells()
+    {
+        foreach (var (gridPos, cellNode) in _instancedCells)
+        {
+            yield return new WorldStateStore.LiveCellState(
+                CellKey(gridPos),
+                CaptureCellDeltas(cellNode),
+                CaptureDynamicRecords(gridPos));
+        }
+    }
+
+    private List<DynamicObjectRecordDto> CaptureDynamicRecords(Vector2I gridPos)
+    {
+        var records = new List<DynamicObjectRecordDto>();
+        if (!_dynamicByCell.TryGetValue(gridPos, out var tracked)) return records;
+
+        foreach (var node in tracked)
+        {
+            // Skip nodes freed outside our control (e.g. picked back up without unregistering).
+            if (!IsInstanceValid(node) || node is not IDynamicSceneObject dynamic) continue;
+
+            Vector3 position = node.GlobalPosition;
+            records.Add(new DynamicObjectRecordDto(
+                dynamic.PersistentId,
+                dynamic.SceneFilePath,
+                position.X, position.Y, position.Z,
+                node.Rotation.Y,
+                dynamic.CaptureState()));
+        }
+        return records;
+    }
+
+    private void SpawnDynamicObjects(Vector2I gridPos, Node cellNode)
+    {
+        foreach (var record in _stateStore.GetCellDynamicObjects(CellKey(gridPos)))
+        {
+            // Synchronous load is acceptable: records per cell are few and the scene is usually
+            // already cached from the original spawn. Threaded prefetch is future work.
+            var packed = ResourceLoader.Load<PackedScene>(record.ScenePath);
+            if (packed == null)
+            {
+                GD.PushWarning($"[WorldStreamer] Dynamic object scene '{record.ScenePath}' missing — record '{record.PersistentId}' skipped.");
+                continue;
+            }
+
+            var instantiated = packed.Instantiate();
+            if (instantiated is not Node3D node || instantiated is not IDynamicSceneObject dynamic)
+            {
+                GD.PushWarning($"[WorldStreamer] '{record.ScenePath}' is not a Node3D IDynamicSceneObject — record '{record.PersistentId}' skipped.");
+                instantiated?.QueueFree();
+                continue;
+            }
+
+            cellNode.AddChild(node);
+            node.GlobalPosition = new Vector3(record.PosX, record.PosY, record.PosZ);
+            node.Rotation = new Vector3(0f, record.RotY, 0f);
+            dynamic.RestoreState(record.State ?? new Dictionary<string, string>());
+
+            if (!_dynamicByCell.TryGetValue(gridPos, out var tracked))
+            {
+                tracked = new List<Node3D>();
+                _dynamicByCell[gridPos] = tracked;
+            }
+            tracked.Add(node);
+        }
     }
 
     private static Dictionary<string, string> CaptureCellDeltas(Node cellNode)
     {
         // Walk all descendants (not just one level) for typed persistent objects, keyed by their
         // stable PersistentId rather than node name (M13). Flatten each object's state as "id.key".
+        // Dynamic objects are excluded: they carry full respawn records (CaptureDynamicRecords).
         var deltas = new Dictionary<string, string>();
         foreach (var persistent in FindPersistentObjects(cellNode))
         {
+            if (persistent is IDynamicSceneObject) continue;
+
             foreach (var pair in persistent.CaptureState())
             {
                 deltas[$"{persistent.PersistentId}.{pair.Key}"] = pair.Value;

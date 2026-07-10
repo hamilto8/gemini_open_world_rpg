@@ -1,0 +1,16 @@
+[gd_resource type="Resource" script_class="LootTableResource" load_steps=4 format=3 uid="uid://loot_supply_crate"]
+
+[ext_resource type="Script" path="res://src/Meridian/Data/LootTableResource.cs" id="1_script"]
+[ext_resource type="Script" path="res://src/Meridian/Data/LootEntryResource.cs" id="2_entry_script"]
+
+[sub_resource type="Resource" id="entry_metal_scrap"]
+script = ExtResource("2_entry_script")
+ItemId = "metal_scrap"
+Weight = 1
+MinQuantity = 5
+MaxQuantity = 5
+
+[resource]
+script = ExtResource("1_script")
+Id = "supply_crate"
+Entries = Array[Resource]([SubResource("entry_metal_scrap")])

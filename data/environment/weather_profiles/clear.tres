@@ -1,0 +1,11 @@
+[gd_resource type="Resource" script_class="WeatherProfile" load_steps=2 format=3 uid="uid://weather_clear"]
+
+[ext_resource type="Script" path="res://src/Meridian/Data/WeatherProfile.cs" id="1_script"]
+
+[resource]
+script = ExtResource("1_script")
+WeatherId = "clear"
+FogDensity = 0.001
+FogColor = Color(0.529412, 0.807843, 0.921569, 1)
+LightColor = Color(1, 1, 1, 1)
+MoveSpeedModifier = 0.0

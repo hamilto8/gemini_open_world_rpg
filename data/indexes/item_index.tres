@@ -1,0 +1,10 @@
+[gd_resource type="Resource" script_class="ItemIndex" load_steps=5 format=3 uid="uid://index_items"]
+
+[ext_resource type="Script" path="res://src/Meridian/Data/Indexes/ItemIndex.cs" id="1_script"]
+[ext_resource type="Resource" path="res://data/items/ammo_9mm.tres" id="2_ammo_9mm"]
+[ext_resource type="Resource" path="res://data/items/metal_scrap.tres" id="3_metal_scrap"]
+[ext_resource type="Resource" path="res://data/items/test_pistol_item.tres" id="4_test_pistol_item"]
+
+[resource]
+script = ExtResource("1_script")
+Definitions = Array[Resource]([ExtResource("2_ammo_9mm"), ExtResource("3_metal_scrap"), ExtResource("4_test_pistol_item")])

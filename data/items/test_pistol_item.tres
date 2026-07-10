@@ -1,0 +1,13 @@
+[gd_resource type="Resource" script_class="ItemResource" load_steps=2 format=3 uid="uid://item_test_pistol_item"]
+
+[ext_resource type="Script" path="res://src/Meridian/Data/ItemResource.cs" id="1_script"]
+
+[resource]
+script = ExtResource("1_script")
+Id = "test_pistol_item"
+DisplayName = "Test Pistol"
+Description = "A holstered pistol carried in the pack."
+IconPath = ""
+MaxStack = 1
+Weight = 3.0
+BaseValue = 30
