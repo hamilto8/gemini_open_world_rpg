@@ -67,6 +67,8 @@ public partial class InputContextServiceNode : Node, IInputContextService, IInpu
 
     public void PopContext() => _service.PopContext();
 
+    public bool TryPopContext(InputContextType expectedContext) => _service.TryPopContext(expectedContext);
+
     public bool IsActionAllowed(string action) => _service.IsActionAllowed(action);
 
     public void RegisterActionForContext(InputContextType context, string action) =>

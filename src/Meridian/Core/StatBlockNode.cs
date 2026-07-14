@@ -1,5 +1,6 @@
 using Godot;
 using System;
+using Meridian.Environment;
 
 namespace Meridian.Core;
 
@@ -9,6 +10,7 @@ namespace Meridian.Core;
 public partial class StatBlockNode : Node
 {
     private readonly StatBlock _stats = new();
+    private IDisposable? _minuteSubscription;
 
     public StatBlock Stats => _stats;
 
@@ -18,6 +20,24 @@ public partial class StatBlockNode : Node
     public override void _Ready()
     {
         _stats.StatChanged += (statId, val) => EmitSignal(SignalName.StatChanged, statId, val);
+        if (Services.TryGet<IEventBus>(out var eventBus) && eventBus != null)
+        {
+            _minuteSubscription = eventBus.Subscribe<MinuteTickEvent>(OnMinuteTick);
+        }
+    }
+
+    public override void _ExitTree()
+    {
+        _minuteSubscription?.Dispose();
+        _minuteSubscription = null;
+    }
+
+    private void OnMinuteTick(MinuteTickEvent _)
+    {
+        if (Services.TryGet<IWorldClock>(out var clock) && clock != null)
+        {
+            _stats.TickModifiers(clock.TotalGameMinutes);
+        }
     }
 
     public float GetStat(string statId) => _stats.GetStat(statId);

@@ -81,7 +81,7 @@ public class QuestDialogueTests
     public void NpcScheduler_ShouldEvaluateStatesDependingOnClockHour()
     {
         var scheduler = new NpcScheduler();
-        
+
         Assert.Equal(NpcActivityState.Sleeping, scheduler.EvaluateState(0));  // 12:00 AM -> Sleep
         Assert.Equal(NpcActivityState.Working, scheduler.EvaluateState(10)); // 10:00 AM -> Work
         Assert.Equal(NpcActivityState.Socializing, scheduler.EvaluateState(18)); // 06:00 PM -> Tavern

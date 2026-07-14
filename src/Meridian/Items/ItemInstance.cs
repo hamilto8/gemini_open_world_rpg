@@ -32,7 +32,7 @@ public class WeaponInstance : ItemInstance
     public int CurrentAmmo { get; set; } = 0;
     public List<string> InstalledModIds { get; } = new();
 
-    public WeaponInstance(string itemDefinitionId, string weaponDefinitionId, int stackCount = 1) 
+    public WeaponInstance(string itemDefinitionId, string weaponDefinitionId, int stackCount = 1)
         : base(itemDefinitionId, stackCount)
     {
         ArgumentException.ThrowIfNullOrEmpty(weaponDefinitionId);

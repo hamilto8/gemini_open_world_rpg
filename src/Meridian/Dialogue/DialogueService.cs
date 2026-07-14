@@ -74,7 +74,7 @@ public class DialogueService
         }
 
         var choice = _currentNode.Choices[choiceIndex];
-        
+
         // Execute choice side effects (e.g. accepts a quest)
         choice.ActionEffect?.Invoke();
 

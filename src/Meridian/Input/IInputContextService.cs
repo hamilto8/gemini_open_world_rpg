@@ -37,6 +37,12 @@ public interface IInputContextService
     void PopContext();
 
     /// <summary>
+    /// Pops only when <paramref name="expectedContext"/> is currently on top. Modal owners use this
+    /// to avoid accidentally removing another system's context when close events arrive out of order.
+    /// </summary>
+    bool TryPopContext(InputContextType expectedContext);
+
+    /// <summary>
     /// Checks if a named input action is permitted under the currently active context.
     /// </summary>
     bool IsActionAllowed(string action);

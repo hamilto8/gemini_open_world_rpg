@@ -33,6 +33,17 @@ public class InputContextService : IInputContextService
         }
     }
 
+    public bool TryPopContext(InputContextType expectedContext)
+    {
+        if (_stack.Count <= 1 || _stack.Peek() != expectedContext)
+        {
+            return false;
+        }
+
+        _stack.Pop();
+        return true;
+    }
+
     public bool IsActionAllowed(string action)
     {
         if (string.IsNullOrEmpty(action)) return false;

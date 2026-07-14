@@ -39,10 +39,24 @@ public class InputContextServiceTests
     }
 
     [Fact]
+    public void ExpectedPop_ShouldNotRemoveAnotherOwnersContext()
+    {
+        var service = new InputContextService();
+        service.PushContext(InputContextType.Vehicle);
+        service.PushContext(InputContextType.UI);
+
+        Assert.False(service.TryPopContext(InputContextType.Vehicle));
+        Assert.Equal(InputContextType.UI, service.CurrentContext);
+
+        Assert.True(service.TryPopContext(InputContextType.UI));
+        Assert.Equal(InputContextType.Vehicle, service.CurrentContext);
+    }
+
+    [Fact]
     public void IsActionAllowed_ShouldRespectActiveContext()
     {
         var service = new InputContextService();
-        
+
         // OnFoot allows jump and move
         Assert.True(service.IsActionAllowed("jump"));
         Assert.True(service.IsActionAllowed("move_forward"));

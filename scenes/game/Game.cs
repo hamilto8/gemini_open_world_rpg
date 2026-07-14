@@ -1,5 +1,6 @@
 using Godot;
 using Meridian.Core;
+using Meridian.Core.Validation;
 using Meridian.Input;
 
 namespace Meridian.Scenes;
@@ -10,6 +11,8 @@ namespace Meridian.Scenes;
 /// </summary>
 public partial class Game : Node
 {
+    [Export] public bool ValidateContentOnBoot { get; set; } = true;
+
     public override void _Ready()
     {
         GD.Print("[GameScene] Main game scene loaded.");
@@ -26,7 +29,29 @@ public partial class Game : Node
             Callable.From(() => director.TransitionTo(GameState.Playing)).CallDeferred();
         }
 
+        if (ValidateContentOnBoot)
+        {
+            ValidateContent();
+        }
+
         // Print initial instructions
         GD.Print("[GameScene] Press the Backquote/Tilde (`) key to open the Debug Console.");
+    }
+
+    private static void ValidateContent()
+    {
+        string projectRoot = ProjectSettings.GlobalizePath("res://");
+        var validator = new ContentValidator(projectRoot);
+        if (validator.ValidateContent(out var errors))
+        {
+            GD.Print("[ContentValidator] Boot validation passed.");
+            return;
+        }
+
+        GD.PushError($"[ContentValidator] Boot validation failed with {errors.Count} issue(s).");
+        foreach (var error in errors)
+        {
+            GD.PushError($"[ContentValidator] {error}");
+        }
     }
 }

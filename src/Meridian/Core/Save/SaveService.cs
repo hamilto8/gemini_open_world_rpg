@@ -65,7 +65,7 @@ public class SaveService : ISaveService
     {
         // 1. Capture states from all participants synchronously on the main thread
         var states = new Dictionary<string, string>();
-        
+
         // We capture states and convert each to JSON string using System.Text.Json
         foreach (var participant in _participants)
         {

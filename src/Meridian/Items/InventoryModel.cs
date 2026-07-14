@@ -29,6 +29,18 @@ public class InventoryModel
 
     public IReadOnlyList<ItemInstance> Items => _items;
 
+    /// <summary>Clears runtime contents while retaining the registered definition catalogue.</summary>
+    public void Clear()
+    {
+        if (_items.Count == 0)
+        {
+            return;
+        }
+
+        _items.Clear();
+        TriggerChanged();
+    }
+
     public void RegisterDefinition(IItemDefinition definition)
     {
         ArgumentNullException.ThrowIfNull(definition);
@@ -57,7 +69,7 @@ public class InventoryModel
     public bool HasSpaceFor(string definitionId, int count)
     {
         if (!_definitions.TryGetValue(definitionId, out var def)) return false;
-        
+
         // Simple weight-based encumbrance gating (Section 7.2 capacity policy)
         float itemWeight = def.Weight * count;
         if (CalculateTotalWeight() + itemWeight > MaxWeight)
@@ -70,6 +82,10 @@ public class InventoryModel
     public bool AddItem(ItemInstance itemInstance)
     {
         ArgumentNullException.ThrowIfNull(itemInstance);
+        if (itemInstance.StackCount <= 0)
+        {
+            return false;
+        }
 
         if (!_definitions.TryGetValue(itemInstance.DefinitionId, out var def))
         {
@@ -103,15 +119,61 @@ public class InventoryModel
                     // Recurse to add remainder
                     return AddItem(itemInstance);
                 }
-                
+
                 TriggerChanged();
                 return true;
             }
         }
 
-        _items.Add(itemInstance);
+        // A fresh insertion must obey MaxStack too. The previous implementation only split when an
+        // existing partial stack was present, so the first AddItem("bullet", 100) could create a
+        // single 100-round stack even when MaxStack was 30.
+        int maxStack = Math.Max(1, def.MaxStack);
+        if (itemInstance.StackCount > maxStack)
+        {
+            int remaining = itemInstance.StackCount;
+            itemInstance.StackCount = maxStack;
+            _items.Add(itemInstance);
+            remaining -= maxStack;
+
+            while (remaining > 0)
+            {
+                int stackCount = Math.Min(maxStack, remaining);
+                _items.Add(CloneForSplit(itemInstance, stackCount));
+                remaining -= stackCount;
+            }
+        }
+        else
+        {
+            _items.Add(itemInstance);
+        }
         TriggerChanged();
         return true;
+    }
+
+    private static ItemInstance CloneForSplit(ItemInstance source, int stackCount)
+    {
+        ItemInstance clone;
+        if (source is WeaponInstance weapon)
+        {
+            var weaponClone = new WeaponInstance(source.DefinitionId, weapon.WeaponDefinitionId, stackCount)
+            {
+                UpgradeLevel = weapon.UpgradeLevel,
+                CurrentAmmo = weapon.CurrentAmmo,
+            };
+            weaponClone.InstalledModIds.AddRange(weapon.InstalledModIds);
+            clone = weaponClone;
+        }
+        else
+        {
+            clone = new ItemInstance(source.DefinitionId, stackCount);
+        }
+
+        foreach (var (key, value) in source.Payload)
+        {
+            clone.Payload[key] = value;
+        }
+        return clone;
     }
 
     public bool RemoveItem(string definitionId, int count) => RemoveItem(definitionId, count, out _);
@@ -160,7 +222,7 @@ public class InventoryModel
     private void TriggerChanged()
     {
         InventoryChanged?.Invoke();
-        
+
         // Publish event to EventBus (Section 7.2 query API)
         if (Services.TryGet<IEventBus>(out var eventBus) && eventBus != null)
         {

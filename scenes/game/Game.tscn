@@ -1,4 +1,4 @@
-[gd_scene load_steps=30 format=3 uid="uid://c1y7v3e"]
+[gd_scene load_steps=32 format=3 uid="uid://c1y7v3e"]
 
 [ext_resource type="Script" path="res://scenes/game/Game.cs" id="1_game"]
 [ext_resource type="PackedScene" uid="uid://c6y7v3e" path="res://scenes/player/PlayerAvatar.tscn" id="2_avatar"]
@@ -23,6 +23,8 @@
 [ext_resource type="Resource" path="res://data/indexes/weather_index.tres" id="21_weather_index"]
 [ext_resource type="Resource" path="res://data/indexes/movement_profile_index.tres" id="22_movement_index"]
 [ext_resource type="Resource" path="res://data/indexes/handling_profile_index.tres" id="23_handling_index"]
+[ext_resource type="Resource" path="res://data/indexes/region_index.tres" id="24_region_index"]
+[ext_resource type="Resource" path="res://data/regions/harbor_town.tres" id="25_harbor_region"]
 
 [sub_resource type="StandardMaterial3D" id="Mat_ground"]
 albedo_color = Color(0.28, 0.45, 0.26, 1)
@@ -57,12 +59,14 @@ LootTables = ExtResource("20_loot_index")
 Weather = ExtResource("21_weather_index")
 MovementProfiles = ExtResource("22_movement_index")
 Handling = ExtResource("23_handling_index")
+Regions = ExtResource("24_region_index")
 
 [node name="PlayerController" type="Node" parent="Systems"]
 script = ExtResource("6_pc")
 
 [node name="WorldStreamer" type="Node" parent="Systems"]
 script = ExtResource("7_streamer")
+ActiveRegion = ExtResource("25_harbor_region")
 
 [node name="MusicManager" type="Node" parent="Systems"]
 script = ExtResource("8_music")

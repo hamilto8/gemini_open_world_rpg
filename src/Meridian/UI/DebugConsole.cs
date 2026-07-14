@@ -90,7 +90,7 @@ public partial class DebugConsole : Control
         else
         {
             _inputField?.ReleaseFocus();
-            inputService.PopContext();
+            inputService.TryPopContext(InputContextType.Console);
         }
     }
 
@@ -131,129 +131,129 @@ public partial class DebugConsole : Control
                     break;
 
                 case "flag":
-                {
-                    if (parts.Length < 2)
                     {
-                        LogMessage("Usage: flag <id> [true|false]", new Color(0.9f, 0.3f, 0.3f));
+                        if (parts.Length < 2)
+                        {
+                            LogMessage("Usage: flag <id> [true|false]", new Color(0.9f, 0.3f, 0.3f));
+                            break;
+                        }
+
+                        if (!Services.TryGet<IWorldFlags>(out var flags) || flags == null)
+                        {
+                            LogMessage("World flags service is not registered.", new Color(0.9f, 0.3f, 0.3f));
+                            break;
+                        }
+
+                        string flagId = parts[1];
+                        if (parts.Length == 2)
+                        {
+                            LogMessage($"flag '{flagId}' = {flags.GetFlag(flagId)}", new Color(0.3f, 0.9f, 0.3f));
+                        }
+                        else if (!bool.TryParse(parts[2], out bool flagValue))
+                        {
+                            LogMessage($"Could not parse '{parts[2]}' as true|false.", new Color(0.9f, 0.3f, 0.3f));
+                        }
+                        else
+                        {
+                            flags.SetFlag(flagId, flagValue);
+                            LogMessage($"flag '{flagId}' set to {flagValue}", new Color(0.3f, 0.9f, 0.3f));
+                        }
                         break;
                     }
-
-                    if (!Services.TryGet<IWorldFlags>(out var flags) || flags == null)
-                    {
-                        LogMessage("World flags service is not registered.", new Color(0.9f, 0.3f, 0.3f));
-                        break;
-                    }
-
-                    string flagId = parts[1];
-                    if (parts.Length == 2)
-                    {
-                        LogMessage($"flag '{flagId}' = {flags.GetFlag(flagId)}", new Color(0.3f, 0.9f, 0.3f));
-                    }
-                    else if (!bool.TryParse(parts[2], out bool flagValue))
-                    {
-                        LogMessage($"Could not parse '{parts[2]}' as true|false.", new Color(0.9f, 0.3f, 0.3f));
-                    }
-                    else
-                    {
-                        flags.SetFlag(flagId, flagValue);
-                        LogMessage($"flag '{flagId}' set to {flagValue}", new Color(0.3f, 0.9f, 0.3f));
-                    }
-                    break;
-                }
 
                 case "action":
-                {
-                    var dispatcher = new ActionDispatcher();
-                    if (parts.Length < 2)
                     {
-                        LogMessage("Usage: action <verb> [args...]. Registered verbs:");
-                        foreach (var usage in dispatcher.UsageLines)
+                        var dispatcher = new ActionDispatcher();
+                        if (parts.Length < 2)
                         {
-                            LogMessage($"  {usage}");
+                            LogMessage("Usage: action <verb> [args...]. Registered verbs:");
+                            foreach (var usage in dispatcher.UsageLines)
+                            {
+                                LogMessage($"  {usage}");
+                            }
+                            break;
+                        }
+
+                        string verb = parts[1];
+                        var actionArgs = new List<string>(parts.Length - 2);
+                        for (int i = 2; i < parts.Length; i++)
+                        {
+                            actionArgs.Add(parts[i]);
+                        }
+
+                        // Real engine seams for the two scene-bound effects (§10.4): teleport_player moves
+                        // the possessed body's global transform; spawn_scene instantiates under the live
+                        // current scene. Kept local to this construction site so ServicesActionContext
+                        // itself stays engine-free (§3.5).
+                        var actionContext = new ServicesActionContext(
+                            warn: msg => LogMessage($"  {msg}", new Color(0.9f, 0.7f, 0.3f)),
+                            teleport: (x, y, z) =>
+                            {
+                                if (Services.TryGet<IPlayerController>(out var pc) && pc?.PossessedEntity is Node3D body)
+                                {
+                                    body.GlobalPosition = new Vector3(x, y, z);
+                                }
+                                else
+                                {
+                                    LogMessage("  TeleportPlayer dropped: nothing possessed.", new Color(0.9f, 0.7f, 0.3f));
+                                }
+                            },
+                            spawnScene: (scenePath, x, y, z) =>
+                            {
+                                var packed = ResourceLoader.Load<PackedScene>(scenePath);
+                                if (packed == null)
+                                {
+                                    return false;
+                                }
+
+                                var instantiated = packed.Instantiate();
+                                if (instantiated is not Node3D node)
+                                {
+                                    instantiated?.QueueFree();
+                                    return false;
+                                }
+
+                                var currentScene = GetTree().CurrentScene;
+                                if (currentScene == null)
+                                {
+                                    node.QueueFree();
+                                    return false;
+                                }
+
+                                currentScene.AddChild(node);
+                                node.GlobalPosition = new Vector3(x, y, z);
+                                return true;
+                            });
+
+                        if (dispatcher.TryDispatch(verb, actionArgs, actionContext, out string dispatchError))
+                        {
+                            LogMessage($"Dispatched '{verb}'.", new Color(0.3f, 0.9f, 0.3f));
+                        }
+                        else
+                        {
+                            LogMessage($"Action failed: {dispatchError}", new Color(0.9f, 0.3f, 0.3f));
                         }
                         break;
                     }
 
-                    string verb = parts[1];
-                    var actionArgs = new List<string>(parts.Length - 2);
-                    for (int i = 2; i < parts.Length; i++)
-                    {
-                        actionArgs.Add(parts[i]);
-                    }
-
-                    // Real engine seams for the two scene-bound effects (§10.4): teleport_player moves
-                    // the possessed body's global transform; spawn_scene instantiates under the live
-                    // current scene. Kept local to this construction site so ServicesActionContext
-                    // itself stays engine-free (§3.5).
-                    var actionContext = new ServicesActionContext(
-                        warn: msg => LogMessage($"  {msg}", new Color(0.9f, 0.7f, 0.3f)),
-                        teleport: (x, y, z) =>
-                        {
-                            if (Services.TryGet<IPlayerController>(out var pc) && pc?.PossessedEntity is Node3D body)
-                            {
-                                body.GlobalPosition = new Vector3(x, y, z);
-                            }
-                            else
-                            {
-                                LogMessage("  TeleportPlayer dropped: nothing possessed.", new Color(0.9f, 0.7f, 0.3f));
-                            }
-                        },
-                        spawnScene: (scenePath, x, y, z) =>
-                        {
-                            var packed = ResourceLoader.Load<PackedScene>(scenePath);
-                            if (packed == null)
-                            {
-                                return false;
-                            }
-
-                            var instantiated = packed.Instantiate();
-                            if (instantiated is not Node3D node)
-                            {
-                                instantiated?.QueueFree();
-                                return false;
-                            }
-
-                            var currentScene = GetTree().CurrentScene;
-                            if (currentScene == null)
-                            {
-                                node.QueueFree();
-                                return false;
-                            }
-
-                            currentScene.AddChild(node);
-                            node.GlobalPosition = new Vector3(x, y, z);
-                            return true;
-                        });
-
-                    if (dispatcher.TryDispatch(verb, actionArgs, actionContext, out string dispatchError))
-                    {
-                        LogMessage($"Dispatched '{verb}'.", new Color(0.3f, 0.9f, 0.3f));
-                    }
-                    else
-                    {
-                        LogMessage($"Action failed: {dispatchError}", new Color(0.9f, 0.3f, 0.3f));
-                    }
-                    break;
-                }
-
                 case "validate-content":
-                {
-                    string projectRoot = ProjectSettings.GlobalizePath("res://");
-                    var validator = new Meridian.Core.Validation.ContentValidator(projectRoot);
-                    if (validator.ValidateContent(out var errors))
                     {
-                        LogMessage("Content validation passed.", new Color(0.3f, 0.9f, 0.3f));
-                    }
-                    else
-                    {
-                        LogMessage($"Content validation found {errors.Count} issue(s):", new Color(0.9f, 0.3f, 0.3f));
-                        foreach (var error in errors)
+                        string projectRoot = ProjectSettings.GlobalizePath("res://");
+                        var validator = new Meridian.Core.Validation.ContentValidator(projectRoot);
+                        if (validator.ValidateContent(out var errors))
                         {
-                            LogMessage($"  {error}", new Color(0.9f, 0.5f, 0.3f));
+                            LogMessage("Content validation passed.", new Color(0.3f, 0.9f, 0.3f));
                         }
+                        else
+                        {
+                            LogMessage($"Content validation found {errors.Count} issue(s):", new Color(0.9f, 0.3f, 0.3f));
+                            foreach (var error in errors)
+                            {
+                                LogMessage($"  {error}", new Color(0.9f, 0.5f, 0.3f));
+                            }
+                        }
+                        break;
                     }
-                    break;
-                }
 
                 case "set-time":
                     if (parts.Length < 2)

@@ -46,7 +46,7 @@ public class SystemsDepthTests
     {
         var network = new FastTravelNetwork();
         string nodeId = "terminal_harbor";
-        
+
         network.RegisterNode(nodeId, "Harbor Town Gate", new Godot.Vector3(100, 0, 100));
 
         Assert.False(network.CanTravelTo(nodeId));

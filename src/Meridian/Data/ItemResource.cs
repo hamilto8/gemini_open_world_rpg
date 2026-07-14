@@ -19,7 +19,7 @@ public partial class ItemResource : Resource, IItemDefinition
     [Export] public int MaxStack { get; set; } = 99;
     [Export] public float Weight { get; set; } = 0.1f;
     [Export] public int BaseValue { get; set; } = 10;
-    
+
     [Export] public Godot.Collections.Array<ItemBehaviorResource> Behaviors { get; set; } = new();
 
     private List<object>? _behaviorsCache;

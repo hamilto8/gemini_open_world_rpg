@@ -2,6 +2,7 @@ using Godot;
 using System;
 using Meridian.Core;
 using Meridian.Input;
+using Meridian.Vehicles;
 
 namespace Meridian.UI;
 
@@ -16,17 +17,24 @@ public partial class MinimalHud : Control
 
     private ProgressBar? _healthBar;
     private ProgressBar? _staminaBar;
-    private TextureRect? _reticle;
+    private Control? _reticle;
     private Label? _interactPrompt;
     private Label? _ammoLabel;
     private Label? _noticeLabel;
+    private Label? _vehicleLabel;
 
     private IDisposable? _focusSubscription;
     private IDisposable? _deviceSubscription;
     private IDisposable? _ammoSubscription;
     private IDisposable? _equipSubscription;
     private IDisposable? _noticeSubscription;
+    private IDisposable? _possessionSubscription;
+    private IDisposable? _vehicleSpeedSubscription;
+    private IDisposable? _vehicleFuelSubscription;
     private Meridian.Player.InteractionFocusChangedEvent _currentFocus;
+    private float _vehicleSpeed;
+    private float _vehicleFuel;
+    private bool _showVehicleHud;
 
     // Monotonic id so an older notice's hide-timer can't blank a newer notice.
     private int _noticeSequence;
@@ -39,7 +47,7 @@ public partial class MinimalHud : Control
 
         _healthBar = GetNodeOrNull<ProgressBar>("HealthBar");
         _staminaBar = GetNodeOrNull<ProgressBar>("StaminaBar");
-        _reticle = GetNodeOrNull<TextureRect>("Reticle");
+        _reticle = GetNodeOrNull<Control>("Reticle");
         _interactPrompt = GetNodeOrNull<Label>("InteractPrompt");
 
         if (_healthBar == null)
@@ -64,11 +72,14 @@ public partial class MinimalHud : Control
             _noticeLabel = new Label { Name = "NoticeLabel", Text = "", Visible = false };
             container.AddChild(_noticeLabel);
 
-            // Center crosshair reticle (aim)
-            _reticle = new TextureRect
+            _vehicleLabel = new Label { Name = "VehicleLabel", Text = "", Visible = false };
+            container.AddChild(_vehicleLabel);
+
+            // Centered, resolution-independent reticle with actual drawn geometry. The earlier empty
+            // TextureRect had no texture and therefore rendered nothing while aiming.
+            _reticle = new AimReticle
             {
                 Name = "Reticle",
-                CustomMinimumSize = new Vector2(16, 16),
                 Visible = false // only visible during aim
             };
             AddChild(_reticle);
@@ -86,6 +97,9 @@ public partial class MinimalHud : Control
         _ammoSubscription = eventBus.Subscribe<Meridian.Combat.WeaponAmmoChangedEvent>(OnAmmoChanged);
         _equipSubscription = eventBus.Subscribe<Meridian.Combat.WeaponEquippedEvent>(OnWeaponEquipped);
         _noticeSubscription = eventBus.Subscribe<HudNoticeEvent>(OnHudNotice);
+        _possessionSubscription = eventBus.Subscribe<PossessionChangedEvent>(OnPossessionChanged);
+        _vehicleSpeedSubscription = eventBus.Subscribe<VehicleSpeedChangedEvent>(OnVehicleSpeedChanged);
+        _vehicleFuelSubscription = eventBus.Subscribe<VehicleFuelChangedEvent>(OnVehicleFuelChanged);
     }
 
     public override void _ExitTree()
@@ -95,6 +109,9 @@ public partial class MinimalHud : Control
         _ammoSubscription?.Dispose();
         _equipSubscription?.Dispose();
         _noticeSubscription?.Dispose();
+        _possessionSubscription?.Dispose();
+        _vehicleSpeedSubscription?.Dispose();
+        _vehicleFuelSubscription?.Dispose();
     }
 
     private void OnHudNotice(HudNoticeEvent ev)
@@ -194,6 +211,46 @@ public partial class MinimalHud : Control
         {
             return "(X)";
         }
-        return "[E]";
+        Key key = InputRebindStore.GetBoundKey("interact");
+        string label = key == Key.None ? "Unbound" : OS.GetKeycodeString(key);
+        return $"[{label}]";
+    }
+
+    private void OnPossessionChanged(PossessionChangedEvent ev)
+    {
+        _showVehicleHud = ev.NewEntity is VehicleAvatar;
+        if (!_showVehicleHud)
+        {
+            _vehicleSpeed = 0f;
+            _vehicleFuel = 0f;
+        }
+        RenderVehicleHud();
+    }
+
+    private void OnVehicleSpeedChanged(VehicleSpeedChangedEvent ev)
+    {
+        _vehicleSpeed = ev.Speed;
+        RenderVehicleHud();
+    }
+
+    private void OnVehicleFuelChanged(VehicleFuelChangedEvent ev)
+    {
+        _vehicleFuel = ev.Fuel;
+        RenderVehicleHud();
+    }
+
+    private void RenderVehicleHud()
+    {
+        if (_vehicleLabel == null)
+        {
+            return;
+        }
+
+        _vehicleLabel.Visible = _showVehicleHud;
+        if (_showVehicleHud)
+        {
+            float speedKph = Mathf.Abs(_vehicleSpeed) * 3.6f;
+            _vehicleLabel.Text = $"Vehicle  {speedKph:0} km/h  |  Fuel {_vehicleFuel:0}%  |  Hold exit control to leave";
+        }
     }
 }

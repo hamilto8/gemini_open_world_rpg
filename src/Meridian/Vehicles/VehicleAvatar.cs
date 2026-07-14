@@ -23,6 +23,8 @@ public partial class VehicleAvatar : CharacterBody3D, IPossessable, IInteractabl
     [Export] public float MaxFuel { get; set; } = 100f;
     [Export] public float InitialFuel { get; set; } = 80f;
     [Export] public Vector3 ExitOffset { get; set; } = new Vector3(-2.0f, 0.5f, 0.0f); // Spawns player on driver side
+    [Export] public float MouseLookSensitivity { get; set; } = 0.003f;
+    [Export] public float StickLookSensitivity { get; set; } = 2.5f;
 
     private IVehicleHandlingProfile? _profile;
     private VehicleMotorModel? _motor;
@@ -32,6 +34,9 @@ public partial class VehicleAvatar : CharacterBody3D, IPossessable, IInteractabl
     private InputFrame _lastInput;
     private float _exitHoldTime;
     private bool _exitArmed;
+    private Camera3D? _camera;
+    private float _cameraYaw;
+    private float _cameraPitch;
 
     private float _lastPublishedSpeed = float.NaN;
     private float _lastPublishedFuel = float.NaN;
@@ -63,6 +68,12 @@ public partial class VehicleAvatar : CharacterBody3D, IPossessable, IInteractabl
             };
         }
         InitializeMotor();
+        _camera = GetNodeOrNull<Camera3D>("Camera3D");
+        if (_camera != null)
+        {
+            _cameraYaw = _camera.Rotation.Y;
+            _cameraPitch = _camera.Rotation.X;
+        }
     }
 
     /// <summary>Injects a handling profile and starting fuel (used by streaming restore and tests).</summary>
@@ -130,7 +141,7 @@ public partial class VehicleAvatar : CharacterBody3D, IPossessable, IInteractabl
 
         // Switch to the vehicle's chase camera while driving (the on-foot camera is disabled with the
         // hidden avatar); the avatar re-activates its own camera in PlayerAvatar.OnPossessed on exit.
-        GetNodeOrNull<Camera3D>("Camera3D")?.MakeCurrent();
+        _camera?.MakeCurrent();
 
         GD.Print("[VehicleAvatar] Possessed by controller.");
     }
@@ -142,7 +153,7 @@ public partial class VehicleAvatar : CharacterBody3D, IPossessable, IInteractabl
 
         if (Services.TryGet<IInputContextService>(out var inputService) && inputService != null)
         {
-            inputService.PopContext();
+            inputService.TryPopContext(InputContextType.Vehicle);
         }
 
         GD.Print("[VehicleAvatar] Released by controller.");
@@ -173,6 +184,8 @@ public partial class VehicleAvatar : CharacterBody3D, IPossessable, IInteractabl
             }
         }
 
+        UpdateCameraLook((float)delta);
+
         if (_motor == null) return;
 
         // Throttle: W/S on keyboard, Right/Left triggers on gamepad (VehicleThrottle). Forward is
@@ -191,6 +204,7 @@ public partial class VehicleAvatar : CharacterBody3D, IPossessable, IInteractabl
         // Integrate as a physics body: forward motion from the motor, gravity when airborne.
         Vector3 forward = -GlobalTransform.Basis.Z;
         Vector3 velocity = forward * _motor.Speed;
+        velocity.Y = Velocity.Y;
 
         if (!IsOnFloor())
         {
@@ -200,15 +214,27 @@ public partial class VehicleAvatar : CharacterBody3D, IPossessable, IInteractabl
         {
             velocity.Y = 0f;
         }
-        else
-        {
-            velocity.Y = Velocity.Y;
-        }
 
         Velocity = velocity;
         MoveAndSlide();
 
         PublishStatsIfChanged();
+    }
+
+    private void UpdateCameraLook(float delta)
+    {
+        if (_camera == null)
+        {
+            return;
+        }
+
+        _cameraYaw -= _lastInput.LookX * MouseLookSensitivity;
+        _cameraYaw -= _lastInput.LookStickX * StickLookSensitivity * delta;
+
+        float pitchDelta = _lastInput.LookY * MouseLookSensitivity
+                         + _lastInput.LookStickY * StickLookSensitivity * delta;
+        _cameraPitch = Mathf.Clamp(_cameraPitch - pitchDelta, -Mathf.Pi / 3f, Mathf.Pi / 6f);
+        _camera.Rotation = new Vector3(_cameraPitch, _cameraYaw, 0f);
     }
 
     private void PublishStatsIfChanged()

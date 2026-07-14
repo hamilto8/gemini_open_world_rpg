@@ -1,6 +1,8 @@
 using Godot;
 using System;
 using Meridian.Core.Save;
+using Meridian.Core.Registry;
+using Meridian.Combat;
 using Meridian.Input;
 using Meridian.Items;
 using Meridian.World;
@@ -18,6 +20,7 @@ public partial class PlayerControllerNode : Node, IPlayerController, IInventoryP
     private readonly InventoryModel _inventory = new();
     private Vector2 _pendingLook;
     private bool _mouseCaptured;
+    private InventorySaveParticipant? _inventorySaveParticipant;
 
     public IPossessable? PossessedEntity => _possessedEntity;
 
@@ -42,6 +45,13 @@ public partial class PlayerControllerNode : Node, IPlayerController, IInventoryP
         if (Services.TryGet<ISaveService>(out var saveService) && saveService != null)
         {
             saveService.RegisterParticipant(this);
+            _inventorySaveParticipant = new InventorySaveParticipant(
+                _inventory,
+                ResolveItemDefinition,
+                () => EquippedWeapon,
+                SetRestoredEquippedWeapon,
+                message => GD.PushWarning(message));
+            saveService.RegisterParticipant(_inventorySaveParticipant);
         }
     }
 
@@ -50,7 +60,12 @@ public partial class PlayerControllerNode : Node, IPlayerController, IInventoryP
         if (Services.TryGet<ISaveService>(out var saveService) && saveService != null)
         {
             saveService.UnregisterParticipant(this);
+            if (_inventorySaveParticipant != null)
+            {
+                saveService.UnregisterParticipant(_inventorySaveParticipant);
+            }
         }
+        _inventorySaveParticipant = null;
 
         // Symmetric unregistration so a torn-down controller can't hand out a stale reference (L2).
         if (Services.TryGet<IPlayerController>(out var pc) && ReferenceEquals(pc, this))
@@ -123,6 +138,7 @@ public partial class PlayerControllerNode : Node, IPlayerController, IInventoryP
 
         _possessedEntity = entity;
         _possessedEntity.OnPossessed(this);
+        TryBindEquippedWeapon(entity);
         GD.Print($"[PlayerController] Possessed: {entity.GetType().Name}");
         PublishPossessionChanged();
     }
@@ -169,8 +185,11 @@ public partial class PlayerControllerNode : Node, IPlayerController, IInventoryP
         // Right-stick camera look (analog rate; mouse-look above is a pixel delta).
         if (inputService.IsActionAllowed("look"))
         {
-            frame.LookStickX = Axis(inputService, "look_right", "look_left");
-            frame.LookStickY = Axis(inputService, "look_down", "look_up");
+            // The context exposes one semantic "look" permission. The four InputMap actions are
+            // implementation details of the gamepad axis and must not be re-gated individually;
+            // doing so left right-stick look permanently at zero in every gameplay context.
+            frame.LookStickX = RawAxis("look_right", "look_left");
+            frame.LookStickY = RawAxis("look_down", "look_up");
         }
 
         // Mouse look/aim delta tracking
@@ -231,6 +250,11 @@ public partial class PlayerControllerNode : Node, IPlayerController, IInventoryP
         float pos = inputService.IsActionAllowed(positive) ? Godot.Input.GetActionStrength(positive) : 0f;
         float neg = inputService.IsActionAllowed(negative) ? Godot.Input.GetActionStrength(negative) : 0f;
         return pos - neg;
+    }
+
+    private static float RawAxis(string positive, string negative)
+    {
+        return Godot.Input.GetActionStrength(positive) - Godot.Input.GetActionStrength(negative);
     }
 
     public object CaptureState()
@@ -295,5 +319,43 @@ public partial class PlayerControllerNode : Node, IPlayerController, IInventoryP
     private StatBlockNode? GetPossessedStatBlock()
     {
         return _possessedEntity is Node node ? node.GetNodeOrNull<StatBlockNode>("StatBlock") : null;
+    }
+
+    private IItemDefinition? ResolveItemDefinition(string id)
+    {
+        if (Services.TryGet<IContentDatabase>(out var database) && database != null
+            && database.Items.TryGet(id, out var definition))
+        {
+            return definition;
+        }
+        return null;
+    }
+
+    private void SetRestoredEquippedWeapon(WeaponInstance? weapon)
+    {
+        EquippedWeapon = weapon;
+        if (_possessedEntity != null)
+        {
+            TryBindEquippedWeapon(_possessedEntity);
+        }
+    }
+
+    private void TryBindEquippedWeapon(IPossessable entity)
+    {
+        if (EquippedWeapon == null || entity is not IWeaponHolder holder)
+        {
+            return;
+        }
+
+        if (Services.TryGet<IContentDatabase>(out var database) && database != null
+            && database.Weapons.TryGet(EquippedWeapon.WeaponDefinitionId, out var definition)
+            && definition != null)
+        {
+            holder.EquipWeapon(EquippedWeapon, definition);
+        }
+        else
+        {
+            GD.PushWarning($"[PlayerController] Equipped weapon definition '{EquippedWeapon.WeaponDefinitionId}' is unavailable.");
+        }
     }
 }

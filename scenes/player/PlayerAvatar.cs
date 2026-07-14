@@ -107,6 +107,7 @@ public partial class PlayerAvatar : CharacterBody3D, IPossessable, IWeaponHolder
     public void OnReleased()
     {
         GD.Print("[PlayerAvatar] Released by controller.");
+        _interactor?.ClearFocus();
         _lastInput = default;
     }
 

@@ -19,6 +19,8 @@ public partial class PauseMenu : Control
     private Control? _controlsPage;
     private Label? _hintLabel;
     private DebugConsole? _console;
+    private Button? _firstMainButton;
+    private Button? _firstControlsButton;
 
     private readonly Dictionary<string, Button> _rebindButtons = new();
     private string? _rebindingAction;
@@ -76,6 +78,22 @@ public partial class PauseMenu : Control
                 Close();
             }
             GetViewport().SetInputAsHandled();
+            return;
+        }
+
+        // Godot's built-in ui_cancel covers the gamepad back button. Without this path the Start
+        // button could open the pause menu, but a controller user could neither back out nor resume.
+        if (_isOpen && @event.IsActionPressed("ui_cancel"))
+        {
+            if (_showingControls)
+            {
+                ShowMainPage();
+            }
+            else
+            {
+                Close();
+            }
+            GetViewport().SetInputAsHandled();
         }
     }
 
@@ -93,6 +111,7 @@ public partial class PauseMenu : Control
 
         PushUiContext();
         Transition(GameState.Paused);
+        _firstMainButton?.GrabFocus();
     }
 
     private void Close()
@@ -116,6 +135,7 @@ public partial class PauseMenu : Control
         _rebindingAction = null;
         if (_controlsPage != null) _controlsPage.Visible = false;
         if (_mainPage != null) _mainPage.Visible = true;
+        if (_isOpen) _firstMainButton?.GrabFocus();
     }
 
     private void ShowControlsPage()
@@ -124,6 +144,7 @@ public partial class PauseMenu : Control
         RefreshAllKeyButtons();
         if (_mainPage != null) _mainPage.Visible = false;
         if (_controlsPage != null) _controlsPage.Visible = true;
+        _firstControlsButton?.GrabFocus();
     }
 
     // --- Button handlers --------------------------------------------------------------------------
@@ -201,7 +222,7 @@ public partial class PauseMenu : Control
     {
         if (Services.TryGet<IInputContextService>(out var service) && service != null)
         {
-            service.PopContext();
+            service.TryPopContext(InputContextType.UI);
         }
     }
 
@@ -259,7 +280,8 @@ public partial class PauseMenu : Control
         WrapWithMargin(panel, vbox, 24);
 
         vbox.AddChild(MakeTitle("Paused", 28));
-        vbox.AddChild(MakeButton("Resume", OnResume));
+        _firstMainButton = MakeButton("Resume", OnResume);
+        vbox.AddChild(_firstMainButton);
         vbox.AddChild(MakeButton("Controls", OnControls));
         vbox.AddChild(MakeButton("Debug Console", OnConsole));
         vbox.AddChild(MakeButton("Quit to Desktop", OnQuit));
@@ -295,6 +317,7 @@ public partial class PauseMenu : Control
             var keyButton = new Button { Text = KeyText(action), CustomMinimumSize = new Vector2(130, 0) };
             keyButton.Pressed += () => BeginRebind(capturedAction);
             _rebindButtons[action] = keyButton;
+            _firstControlsButton ??= keyButton;
             row.AddChild(keyButton);
 
             keyboard.AddChild(row);

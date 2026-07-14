@@ -1,7 +1,7 @@
 # Project Meridian — Game Architecture & Systems Review
 
 **Date:** July 5, 2026  
-**Status:** Reviewed & Approved for Phase 0 Execution  
+**Status:** Historical architecture review; implementation readiness superseded July 14, 2026
 **Audience:** Development Team & Autonomous Coding Agents  
 
 ---
@@ -65,15 +65,8 @@ graph TD
 ```
 
 ### Phase Deliverables Status
-* **[COMPLETED] Phase 0: Foundations:** Core project scaffolding, EventBus, Services locator, atomic SaveService skeleton, GameDirector state machine, PerfHUD, DebugConsole, and ContentValidator.
-* **[COMPLETED] Phase 1: On-Foot Core:** Character locomotion motor, state machine (Grounded/Airborne/Crouch/Sprint), aim camera interpolation, StatBlocks, and damage mitigation target dummy.
-* **[COMPLETED] Phase 2: Items & Weapons:** Stacking inventory containers, equipment slots, atomic transaction service, hitscan weapon controller, and upgrade bench.
-* **[COMPLETED] Phase 3: World & Streaming:** Cell loader interface, WorldStateStore deltas persistence, and WorldStreamerNode active/simulated/visual streaming rings.
-* **[COMPLETED] Phase 4: Vehicles v1:** Boarding/unboarding possession swap interface, handling profiles, fuel burn rates, and braking controls.
-* **[COMPLETED] Phase 5: Time & Weather v1:** ScheduledEventRunner event tracking, WeatherProfile resources, and dynamic weather stat modifier pushes.
-* **[COMPLETED] Phase 6: Quests, Dialogue & NPC Life:** QuestManager objective evaluations, DialogueService branching conversations, and NpcLifeController hourly routines.
-* **[COMPLETED] Phase 7: Systems Depth:** ProgressionManager curves, FastTravelNetwork validations, and MusicManager dynamic tension crossfades.
-* **[COMPLETED] Phase 8: Content & Polish:** AudioCueProfile resources, FootstepMaterialDetector matching rules, and AccessibilitySettings toggles.
+
+The completed labels below were removed after a repository-wide runtime, architecture, gameplay, save, and UX audit found that many systems are tested primitives but are not composed into the playable scene or backed by the registries, persistence, validation, UI, and authoring workflow required by their phase exit criteria. Treat this document as the original architecture evaluation, not proof of implementation completion. The canonical implementation status is [HANDOFF_READINESS_AUDIT_2026-07-14.md](HANDOFF_READINESS_AUDIT_2026-07-14.md).
 
 ---
 
@@ -84,4 +77,3 @@ To solve the native crash issues typical in C# Godot unit testing (where instant
 - **Domain Models Consume Interfaces:** Inventory and combat logic consume interfaces (`IItemDefinition`, `IEquippableBehavior`, `IWeaponDefinition`) instead of writing direct dependencies on concrete Godot Resource classes (`ItemResource`, `WeaponResource`).
 - **Resource Classes Implement Interfaces:** Concrete Godot resources inherit from `Godot.Resource` and implement their respective interface. They are used solely as serialized data containers in the editor.
 - **Pure C# Mocks in Unit Tests:** Headless unit tests instantiate pure C# mock classes (`BasicItemDefinition`, `BasicWeaponDefinition`) implementing the interfaces, allowing complete testing of inventory math, transactions, and combat pipelines in under 40 milliseconds without native Godot engine boots.
-

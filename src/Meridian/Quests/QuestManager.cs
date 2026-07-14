@@ -4,6 +4,7 @@ using System.Linq;
 using Meridian.Core;
 using Meridian.Core.Save;
 using Meridian.Items;
+using Meridian.Core.Registry;
 
 namespace Meridian.Quests;
 
@@ -138,11 +139,14 @@ public class QuestManager : ISaveParticipant
     {
         if (def.Rewards.Count == 0) return;
         if (!Services.TryGet<IInventoryProvider>(out var provider) || provider == null) return;
+        if (!Services.TryGet<IContentDatabase>(out var database) || database == null) return;
 
         foreach (var reward in def.Rewards)
         {
-            if (!string.IsNullOrEmpty(reward.ItemId) && reward.Count > 0)
+            if (!string.IsNullOrEmpty(reward.ItemId) && reward.Count > 0
+                && database.Items.TryGet(reward.ItemId, out var definition) && definition != null)
             {
+                provider.Inventory.RegisterDefinition(definition);
                 provider.Inventory.AddItem(new ItemInstance(reward.ItemId, reward.Count));
             }
         }

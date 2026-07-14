@@ -4,6 +4,8 @@ Project Meridian is a **theme-agnostic, framework-first architecture** for a 3D 
 
 The framework is designed around strict data-driven patterns to allow solo developers and small teams to expand content (weapons, items, vehicles, regions, quests) with **zero modifications to the core C# codebase** ("new files + one index entry, zero edits to core C#").
 
+> **Readiness status (July 14, 2026):** this repository is a strong framework prototype, not yet a story/content-team handoff build. See the [current readiness audit](docs/HANDOFF_READINESS_AUDIT_2026-07-14.md) for verified capabilities, remediation completed in this pass, and remaining blockers.
+
 ---
 
 ## 🚀 Architectural Pillars
@@ -16,7 +18,7 @@ The framework is designed around strict data-driven patterns to allow solo devel
 
 ---
 
-## 🛠️ Implemented Systems (Phase 0 Foundations)
+## 🛠️ Implemented Framework Prototype
 
 Phase 0 establishes the "Walking Skeleton" and core services:
 
@@ -28,6 +30,8 @@ Phase 0 establishes the "Walking Skeleton" and core services:
 - **PerfHUD:** Always-on debug overlay tracking frame time against the 16.6ms budget, memory utilization, draw calls, and object count.
 - **DebugConsole:** Developer console supporting runtime cheat/test commands (`set-time`, `set-weather`, `save`, `load`) accessible via the Grave/Tilde key (`~`).
 - **ContentValidator:** Validation tool checking indices and directories at boot for missing files, duplicate IDs, or broken references.
+
+The repository also contains tested domain primitives for inventory, weapons, quests, dialogue, progression, NPC schedules, streaming, vehicles, environment simulation, and fast travel. Several of those primitives are not yet composed into the shipped game scene, backed by complete content registries, or represented by production UI. The playable build is therefore a systems prototype rather than a complete vertical slice.
 
 ---
 
@@ -90,12 +94,12 @@ godot --path .
 
 ## 🗺️ Roadmap & Phasing
 
-- [x] **Phase 0: Foundations** — Walking skeleton, autoloads, input contexts, save skeleton, perf HUD, validator.
-- [x] **Phase 1: On-Foot Core** — PlayerController, MovementMotor, Locomotion HSM, CameraRig, StatBlock, minimal HUD.
-- [x] **Phase 2: Items & Weapons** — InventoryModel, Equipment system, WeaponController (hitscan), upgrade/crafting bench.
-- [x] **Phase 3: World & Streaming** — RegionDefinitions, cell lifecycle streamer, WorldStateStore, Terrain3D integration.
-- [x] **Phase 4: Vehicles v1** — Possession loop, VehicleBody3D prototype, HandlingProfile.
-- [x] **Phase 5: Time & Weather v1** — ScheduledEventRunner, Weather effects, gameplay stat modifiers.
-- [x] **Phase 6: Quests, Dialogue & NPC Life** — Quest manager, Dialogic 2 bridge, schedule-driven NPC schedules, Combat AI.
-- [x] **Phase 7: Systems Depth** — Full skill trees, cover-based AI, fast travel, music state machine.
-- [x] **Phase 8: Content & Polish** — Region authoring, audio cues, accessibility checklist, performance pass.
+- [x] **Phase 0: Foundations** — Walking skeleton, core services, input contexts, save skeleton, diagnostics, and validator foundations.
+- [ ] **Phase 1: On-Foot Core** — Functional gray-box locomotion, camera, stats, and aiming; final animation, combat lifecycle, and feedback remain.
+- [ ] **Phase 2: Items & Weapons** — Domain models and a hitscan prototype exist; production inventory/equipment UI, data-driven upgrades, and crafting remain.
+- [ ] **Phase 3: World & Streaming** — A wired one-cell streaming smoke path now exists; authoring schema, priority/time budgets, terrain, and stress validation remain.
+- [ ] **Phase 4: Vehicles v1** — A board/drive/exit prototype exists; persistence, damage, safe exit, camera polish, and production HUD remain.
+- [ ] **Phase 5: Time & Weather v1** — Clock/weather primitives exist; visual day/night, forecast scheduling, and authored effects remain.
+- [ ] **Phase 6: Quests, Dialogue & NPC Life** — Tested domain primitives exist but are not runtime-composed into the shipped scene.
+- [ ] **Phase 7: Systems Depth** — Partial progression, fast-travel, and music primitives exist; the phase exit criteria are not met.
+- [ ] **Phase 8: Content & Polish** — Content, accessibility integration, UI art/theme, localization, profiling, and polish remain.

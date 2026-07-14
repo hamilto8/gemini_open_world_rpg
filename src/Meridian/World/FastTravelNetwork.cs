@@ -45,7 +45,7 @@ public class FastTravelNetwork
             if (!node.IsDiscovered)
             {
                 node.IsDiscovered = true;
-                
+
                 // Publish discovery event
                 if (Services.TryGet<IEventBus>(out var eventBus) && eventBus != null)
                 {

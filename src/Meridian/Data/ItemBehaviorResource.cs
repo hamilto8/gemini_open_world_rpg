@@ -19,7 +19,7 @@ public abstract partial class ItemBehaviorResource : Resource
 public partial class EquippableBehavior : ItemBehaviorResource, IEquippableBehavior
 {
     [Export] public string SlotId { get; set; } = "primary";
-    
+
     // List of stat modifiers granted when equipped (e.g. +10 max_health, +5 armor)
     [Export] public string TargetStatId { get; set; } = "";
     [Export] public float ModifierValue { get; set; } = 0f;

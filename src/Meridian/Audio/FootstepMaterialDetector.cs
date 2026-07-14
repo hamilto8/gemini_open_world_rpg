@@ -72,7 +72,7 @@ public partial class FootstepMaterialDetectorNode : RayCast3D
             if (!string.IsNullOrEmpty(sfxPath))
             {
                 GD.Print($"[FootstepDetector] Playing footstep SFX '{sfxPath}' for material '{material}'");
-                
+
                 // Under Godot, we play the audio stream:
                 // AudioDirector.PlaySfx(sfxPath, GlobalPosition);
             }

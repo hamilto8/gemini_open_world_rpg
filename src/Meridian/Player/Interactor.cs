@@ -87,6 +87,24 @@ public partial class Interactor : RayCast3D
         GD.Print($"[Interactor] Interacting with: {_focusedInteractable.ObjectName}");
         _focusedInteractable.Interact(_player);
     }
+
+    /// <summary>
+    /// Clears the current focus and notifies HUD listeners. Possession handoffs disable the on-foot
+    /// avatar before another physics query can run, so they must explicitly clear the prompt.
+    /// </summary>
+    public void ClearFocus()
+    {
+        if (_focusedInteractable == null)
+        {
+            return;
+        }
+
+        _focusedInteractable = null;
+        if (Services.TryGet<IEventBus>(out var eventBus) && eventBus != null)
+        {
+            eventBus.Publish(new InteractionFocusChangedEvent(null, null));
+        }
+    }
 }
 
 /// <summary>

@@ -1,5 +1,6 @@
 using System;
 using Meridian.Audio;
+using Meridian.Core.Registry;
 using Meridian.Items;
 using Meridian.Quests;
 
@@ -51,6 +52,14 @@ public sealed class ServicesActionContext : IActionContext
             return false;
         }
 
+        if (!Services.TryGet<IContentDatabase>(out var database) || database is null
+            || !database.Items.TryGet(id, out var definition) || definition is null)
+        {
+            _warn($"GiveItem('{id}', {count}) dropped: item is not registered in the content database.");
+            return false;
+        }
+
+        provider.Inventory.RegisterDefinition(definition);
         return provider.Inventory.AddItem(new ItemInstance(id, count));
     }
 

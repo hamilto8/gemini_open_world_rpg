@@ -61,7 +61,7 @@ public class StatBlock
 
         _baseValues[statId] = value;
         _dirtyStats.Add(statId);
-        
+
         StatChanged?.Invoke(statId, GetStat(statId));
     }
 

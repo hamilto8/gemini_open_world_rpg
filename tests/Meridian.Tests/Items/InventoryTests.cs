@@ -46,7 +46,7 @@ public class InventoryTests : IDisposable
     {
         var stats = new StatBlock();
         var equip = new EquipmentModel();
-        
+
         var armorBehavior = new MockEquippableBehavior();
         var chestDefinition = new BasicItemDefinition("leather_armor")
         {
@@ -78,7 +78,7 @@ public class InventoryTests : IDisposable
 
         var transaction = new InventoryTransaction();
         transaction.DeductItem(inventory, "metal_scrap", 3);
-        
+
         // This add will fail because item_heavy exceeds max weight (15 lbs)
         var heavyItem = new ItemInstance("heavy_item", 1);
         inventory.RegisterDefinition(new BasicItemDefinition("heavy_item", 99, 15.0f));
@@ -129,6 +129,18 @@ public class InventoryTests : IDisposable
 
         Assert.Equal(45, inventory.GetItemCount("bullet"));
         Assert.Equal(2, inventory.Items.Count); // split into two stacks at the 30 boundary
+    }
+
+    [Fact]
+    public void AddItem_FreshOversizedInsertion_ShouldSplitEveryStack()
+    {
+        var inventory = new InventoryModel { MaxWeight = 1000f };
+        inventory.RegisterDefinition(new BasicItemDefinition("bullet", maxStack: 30, weight: 0.0f));
+
+        Assert.True(inventory.AddItem(new ItemInstance("bullet", 100)));
+
+        Assert.Equal(100, inventory.GetItemCount("bullet"));
+        Assert.Equal(new[] { 30, 30, 30, 10 }, inventory.Items.Select(item => item.StackCount));
     }
 
     [Fact]

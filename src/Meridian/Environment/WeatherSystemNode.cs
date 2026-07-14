@@ -54,6 +54,13 @@ public partial class WeatherSystemNode : Node, IWeatherSystem
             _currentWeather = DefaultWeather;
             ApplyWeatherModifiers();
         }
+        else
+        {
+            // Autoloads enter before the gameplay scene's ContentDatabase. Defer the registry-backed
+            // default until that scene node has populated its indexes, otherwise weather remains null
+            // forever despite authored profiles being present.
+            Callable.From(InitializeRegistryDefault).CallDeferred();
+        }
     }
 
     public override void _ExitTree()
@@ -89,6 +96,16 @@ public partial class WeatherSystemNode : Node, IWeatherSystem
             {
                 _profilesById[profile.WeatherId] = profile;
             }
+        }
+    }
+
+    private void InitializeRegistryDefault()
+    {
+        if (_currentWeather == null && TryResolveProfile("clear", out var profile) && profile != null)
+        {
+            _currentWeather = profile;
+            _currentIntensity = 1f;
+            ApplyWeatherModifiers();
         }
     }
 
@@ -129,7 +146,7 @@ public partial class WeatherSystemNode : Node, IWeatherSystem
 
         string oldId = CurrentWeatherId;
         intensity = Mathf.Clamp(intensity, 0f, 1f);
-        if (oldId == weatherId && Mathf.IsEqualApprox(_currentIntensity, intensity))
+        if (_currentWeather != null && oldId == weatherId && Mathf.IsEqualApprox(_currentIntensity, intensity))
         {
             return;
         }

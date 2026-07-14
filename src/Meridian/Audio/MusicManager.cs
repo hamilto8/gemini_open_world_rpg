@@ -19,11 +19,11 @@ public class MusicManager
     public void SetTension(float targetTension)
     {
         _tension = Math.Clamp(targetTension, 0f, 1f);
-        
+
         // Calculate crossfades (Section 19.1 dynamic stem layers)
         // Lerp exploration volume from 0 dB (full) down to -40 dB
         _explorationVolumeDb = Lerp(0f, -40f, _tension);
-        
+
         // Lerp combat volume from -80 dB (muted) up to 0 dB (full)
         _combatVolumeDb = Lerp(-80f, 0f, _tension);
     }

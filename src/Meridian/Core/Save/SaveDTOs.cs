@@ -37,6 +37,24 @@ public record PlayerStateDto(
     string PossessedGuid
 );
 
+/// <summary>Serializable item instance. Weapon-only fields are null/default for ordinary items.</summary>
+public record ItemInstanceDto(
+    string DefinitionId,
+    int StackCount,
+    Dictionary<string, string> Payload,
+    string? WeaponDefinitionId,
+    int UpgradeLevel,
+    int CurrentAmmo,
+    List<string> InstalledModIds
+);
+
+/// <summary>Player inventory/equipped-weapon module, separate from transform/vitals state.</summary>
+public record InventoryStateDto(
+    float MaxWeight,
+    List<ItemInstanceDto> Items,
+    ItemInstanceDto? EquippedWeapon
+);
+
 /// <summary>
 /// Standard world flags DTO for consequence memory.
 /// </summary>
@@ -91,6 +109,8 @@ public record WorldStateDto(Dictionary<string, CellStateDto> Cells);
 [JsonSerializable(typeof(GameSaveData))]
 [JsonSerializable(typeof(SaveHeaderDto))]
 [JsonSerializable(typeof(PlayerStateDto))]
+[JsonSerializable(typeof(ItemInstanceDto))]
+[JsonSerializable(typeof(InventoryStateDto))]
 [JsonSerializable(typeof(WorldFlagsDto))]
 [JsonSerializable(typeof(TimeWeatherDto))]
 [JsonSerializable(typeof(QuestSaveDto))]
@@ -100,6 +120,7 @@ public record WorldStateDto(Dictionary<string, CellStateDto> Cells);
 [JsonSerializable(typeof(Dictionary<string, CellStateDto>))]
 [JsonSerializable(typeof(List<DynamicObjectRecordDto>))]
 [JsonSerializable(typeof(Dictionary<string, string>))]
+[JsonSerializable(typeof(List<ItemInstanceDto>))]
 [JsonSerializable(typeof(Dictionary<string, int>))]
 [JsonSerializable(typeof(Dictionary<string, Dictionary<string, int>>))]
 public partial class SaveJsonContext : JsonSerializerContext

@@ -63,7 +63,7 @@ public class EquipmentModel
                 value: equipBehavior.ModifierValue,
                 sourceTag: $"equip_{slotId}"
             );
-            
+
             _appliedModifiers[slotId] = modifier;
             hostStats.AddModifier(modifier);
         }

@@ -178,11 +178,20 @@ public partial class WorldStreamerNode : Node, IWorldStreamer
 
     private void ResolvePlayer()
     {
-        if (_player != null) return;
         if (Services.TryGet<IPlayerController>(out var pc) && pc?.PossessedEntity is Node3D avatar)
         {
+            if (!ReferenceEquals(_player, avatar))
+            {
+                // Possession can move from the on-foot avatar to a much faster vehicle. Reset the
+                // velocity sample so the first vehicle frame does not produce a bogus lookahead spike.
+                _hasInterestSample = false;
+            }
             _player = avatar;
+            return;
         }
+
+        _player = null;
+        _hasInterestSample = false;
     }
 
     private Vector2 ComputeInterestPoint(float delta)
