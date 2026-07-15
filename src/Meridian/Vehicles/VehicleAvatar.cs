@@ -1,5 +1,9 @@
 using Godot;
+using System;
+using System.Collections.Generic;
+using Meridian.Combat;
 using Meridian.Core;
+using Meridian.Core.Save;
 using Meridian.Data;
 using Meridian.Input;
 
@@ -10,7 +14,7 @@ namespace Meridian.Vehicles;
 /// <see cref="VehicleMotorModel"/> each physics frame, then integrates the result as a physics body
 /// (gravity + MoveAndSlide). Enforces Section 11 requirements.
 /// </summary>
-public partial class VehicleAvatar : CharacterBody3D, IPossessable, IInteractable
+public partial class VehicleAvatar : CharacterBody3D, IPossessable, IInteractable, IPersistentVehicle, IDamageable, IHitZoneResolver
 {
     // HUD data changes slowly; only republish when it moves by at least these thresholds.
     private const float SpeedEventEpsilon = 0.25f;
@@ -20,8 +24,12 @@ public partial class VehicleAvatar : CharacterBody3D, IPossessable, IInteractabl
     private const float ExitHoldSeconds = 0.6f;
 
     [Export] public HandlingProfile? ProfileResource { get; set; }
+    [Export] public string PersistentVehicleId { get; set; } = "vehicle";
     [Export] public float MaxFuel { get; set; } = 100f;
     [Export] public float InitialFuel { get; set; } = 80f;
+    [Export] public float MaxHealth { get; set; } = 250f;
+    [Export] public float Armor { get; set; } = 15f;
+    [Export] public float RespawnSeconds { get; set; } = 10f;
     [Export] public Vector3 ExitOffset { get; set; } = new Vector3(-2.0f, 0.5f, 0.0f); // Spawns player on driver side
     [Export] public float MouseLookSensitivity { get; set; } = 0.003f;
     [Export] public float StickLookSensitivity { get; set; } = 2.5f;
@@ -37,6 +45,11 @@ public partial class VehicleAvatar : CharacterBody3D, IPossessable, IInteractabl
     private Camera3D? _camera;
     private float _cameraYaw;
     private float _cameraPitch;
+    private readonly StatBlock _vitals = new();
+    private Transform3D _spawnTransform;
+    private uint _originalCollisionLayer;
+    private float _respawnRemaining;
+    private bool _isDestroyed;
 
     private float _lastPublishedSpeed = float.NaN;
     private float _lastPublishedFuel = float.NaN;
@@ -48,9 +61,16 @@ public partial class VehicleAvatar : CharacterBody3D, IPossessable, IInteractabl
     public float CurrentSpeed => _motor?.Speed ?? 0f;
     public float SteeringAngle => _motor?.SteeringAngle ?? 0f;
     public IVehicleHandlingProfile? Profile => _profile ?? ProfileResource;
+    public string VehicleDefinitionId => Profile?.Id ?? "unknown_vehicle";
 
     public override void _Ready()
     {
+        _spawnTransform = GlobalTransform;
+        _originalCollisionLayer = CollisionLayer;
+        _vitals.SetBaseStat("max_health", MaxHealth);
+        _vitals.SetBaseStat("health", MaxHealth);
+        _vitals.SetBaseStat("armor", Armor);
+
         // Fall back to a sensible default handling profile so a vehicle placed in a scene without an
         // authored HandlingProfile is still drivable (test world convenience).
         if (Profile == null)
@@ -73,6 +93,19 @@ public partial class VehicleAvatar : CharacterBody3D, IPossessable, IInteractabl
         {
             _cameraYaw = _camera.Rotation.Y;
             _cameraPitch = _camera.Rotation.X;
+        }
+
+        if (Services.TryGet<VehiclePersistenceService>(out var persistence) && persistence != null)
+        {
+            persistence.Register(this);
+        }
+    }
+
+    public override void _ExitTree()
+    {
+        if (Services.TryGet<VehiclePersistenceService>(out var persistence) && persistence != null)
+        {
+            persistence.Unregister(this);
         }
     }
 
@@ -166,6 +199,19 @@ public partial class VehicleAvatar : CharacterBody3D, IPossessable, IInteractabl
 
     public override void _PhysicsProcess(double delta)
     {
+        if (_isDestroyed)
+        {
+            if (RespawnSeconds > 0f)
+            {
+                _respawnRemaining -= (float)delta;
+                if (_respawnRemaining <= 0f)
+                {
+                    RespawnVehicle();
+                }
+            }
+            return;
+        }
+
         if (_possessingController == null) return;
 
         // Exit on a long-press of E / B (armed only once the input is released after boarding).
@@ -268,7 +314,7 @@ public partial class VehicleAvatar : CharacterBody3D, IPossessable, IInteractabl
         // Always restore the avatar body, regardless of how possession resolves below.
         if (avatar != null)
         {
-            avatar.GlobalPosition = GlobalPosition + GlobalTransform.Basis * ExitOffset;
+            avatar.GlobalPosition = FindSafeExitPosition(avatar);
             avatar.Visible = true;
             avatar.ProcessMode = ProcessModeEnum.Inherit;
         }
@@ -284,6 +330,143 @@ public partial class VehicleAvatar : CharacterBody3D, IPossessable, IInteractabl
         {
             controller.Release();
         }
+    }
+
+    private Vector3 FindSafeExitPosition(Node3D avatar)
+    {
+        Vector3[] localOffsets =
+        {
+            ExitOffset,
+            new Vector3(-ExitOffset.X, ExitOffset.Y, ExitOffset.Z),
+            new Vector3(0f, ExitOffset.Y, Math.Abs(ExitOffset.X)),
+            new Vector3(0f, ExitOffset.Y, -Math.Abs(ExitOffset.X)),
+        };
+
+        PhysicsDirectSpaceState3D space = GetWorld3D().DirectSpaceState;
+        foreach (Vector3 offset in localOffsets)
+        {
+            Vector3 approximate = GlobalPosition + GlobalTransform.Basis * offset;
+            var groundQuery = PhysicsRayQueryParameters3D.Create(
+                approximate + Vector3.Up * 2f,
+                approximate + Vector3.Down * 4f);
+            groundQuery.Exclude = new Godot.Collections.Array<Rid> { GetRid() };
+
+            Godot.Collections.Dictionary hit = space.IntersectRay(groundQuery);
+            Vector3 candidate = hit.Count > 0 ? (Vector3)hit["position"] + Vector3.Up * 0.08f : approximate;
+            if (IsExitSpaceClear(space, avatar, candidate))
+            {
+                return candidate;
+            }
+        }
+
+        GD.PushWarning($"[VehicleAvatar] No fully clear exit found for '{PersistentVehicleId}'; using elevated fallback.");
+        return GlobalPosition + GlobalTransform.Basis * ExitOffset + Vector3.Up;
+    }
+
+    private bool IsExitSpaceClear(PhysicsDirectSpaceState3D space, Node3D avatar, Vector3 candidate)
+    {
+        if (avatar.GetNodeOrNull<CollisionShape3D>("CollisionShape3D")?.Shape is not Shape3D shape)
+        {
+            return true;
+        }
+
+        var query = new PhysicsShapeQueryParameters3D
+        {
+            Shape = shape,
+            Transform = new Transform3D(avatar.GlobalBasis, candidate),
+            CollisionMask = CollisionMask,
+            CollideWithAreas = false,
+            CollideWithBodies = true,
+            Exclude = new Godot.Collections.Array<Rid> { GetRid() },
+        };
+        return space.IntersectShape(query, 1).Count == 0;
+    }
+
+    public HitZone ResolveHitZone(Vector3 worldHitPosition)
+        => worldHitPosition.Y - GlobalPosition.Y > 0.8f ? HitZone.Weakpoint : HitZone.Body;
+
+    public void ApplyDamage(DamageInfo info)
+    {
+        if (_isDestroyed) return;
+
+        DamageApplicationResult result = DamagePipeline.Apply(_vitals, info);
+        if (!result.WasApplied) return;
+
+        if (Services.TryGet<IEventBus>(out var eventBus) && eventBus != null)
+        {
+            eventBus.Publish(new DamageDealtEvent(
+                ObjectName,
+                result.AppliedDamage,
+                info.Zone is HitZone.Head or HitZone.Weakpoint,
+                result.NewHealth,
+                result.IsDead));
+        }
+
+        if (result.IsDead)
+        {
+            DestroyVehicle();
+        }
+    }
+
+    private void DestroyVehicle()
+    {
+        if (_possessingController != null)
+        {
+            Unboard();
+        }
+        _isDestroyed = true;
+        _respawnRemaining = RespawnSeconds;
+        Velocity = Vector3.Zero;
+        Visible = false;
+        CollisionLayer = 0;
+    }
+
+    private void RespawnVehicle()
+    {
+        GlobalTransform = _spawnTransform;
+        Velocity = Vector3.Zero;
+        _vitals.SetBaseStat("health", _vitals.GetStat("max_health"));
+        _initialFuelOverride = InitialFuel;
+        InitializeMotor();
+        Visible = true;
+        CollisionLayer = _originalCollisionLayer;
+        _isDestroyed = false;
+        _respawnRemaining = 0f;
+    }
+
+    public VehicleStateDto CaptureVehicleState(string currentRegionId, bool isPlayerPossessed)
+    {
+        return new VehicleStateDto(
+            PersistentId: PersistentVehicleId,
+            DefinitionId: VehicleDefinitionId,
+            RegionId: currentRegionId,
+            PositionX: GlobalPosition.X,
+            PositionY: GlobalPosition.Y,
+            PositionZ: GlobalPosition.Z,
+            RotationY: GlobalRotation.Y,
+            Fuel: CurrentFuel,
+            Health: _vitals.GetStat("health"),
+            IsPlayerPossessed: isPlayerPossessed,
+            CustomState: new Dictionary<string, string>());
+    }
+
+    public void RestoreVehicleState(VehicleStateDto state)
+    {
+        if (!state.PersistentId.Equals(PersistentVehicleId, System.StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        GlobalPosition = new Vector3(state.PositionX, state.PositionY, state.PositionZ);
+        GlobalRotation = new Vector3(GlobalRotation.X, state.RotationY, GlobalRotation.Z);
+        _initialFuelOverride = state.Fuel;
+        InitializeMotor();
+        _vitals.SetBaseStat("health", Math.Clamp(state.Health, 0f, _vitals.GetStat("max_health")));
+        _isDestroyed = state.Health <= 0f;
+        Visible = !_isDestroyed;
+        CollisionLayer = _isDestroyed ? 0 : _originalCollisionLayer;
+        _lastPublishedFuel = float.NaN;
+        _lastPublishedSpeed = float.NaN;
     }
 }
 

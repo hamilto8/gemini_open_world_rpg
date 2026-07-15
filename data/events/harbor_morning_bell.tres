@@ -1,0 +1,28 @@
+[gd_resource type="Resource" script_class="ScheduledEventDefinition" load_steps=8 format=3]
+
+[ext_resource type="Script" path="res://src/Meridian/Data/ScheduledEventDefinition.cs" id="1_event"]
+[ext_resource type="Script" path="res://src/Meridian/Data/Conditions/PlayerInRegionConditionResource.cs" id="2_region"]
+[ext_resource type="Script" path="res://src/Meridian/Data/Actions/ShowNotificationActionResource.cs" id="3_notice"]
+[ext_resource type="Script" path="res://src/Meridian/Data/Actions/SetWorldFlagActionResource.cs" id="4_flag"]
+
+[sub_resource type="Resource" id="Condition_region"]
+script = ExtResource("2_region")
+RegionId = "harbor_town"
+
+[sub_resource type="Resource" id="Action_notice"]
+script = ExtResource("3_notice")
+Message = "The harbor morning bell echoes across the quay."
+
+[sub_resource type="Resource" id="Action_flag"]
+script = ExtResource("4_flag")
+FlagId = "harbor_bell_rung_today"
+Value = true
+
+[resource]
+script = ExtResource("1_event")
+Id = "harbor_morning_bell"
+Hour = 7
+Minute = 0
+IsRecurring = true
+ConditionResources = Array[Resource]([SubResource("Condition_region")])
+ActionResources = Array[Resource]([SubResource("Action_notice"), SubResource("Action_flag")])

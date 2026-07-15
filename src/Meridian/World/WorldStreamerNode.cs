@@ -1,7 +1,9 @@
 using Godot;
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using Meridian.Core;
+using Meridian.Core.Registry;
 using Meridian.Core.Save;
 using Meridian.Data;
 
@@ -25,7 +27,7 @@ public enum CellState
 /// time-slices instantiation on the main thread to prevent frame hitching.
 /// Enforces Section 4.3 and 4.4 requirements.
 /// </summary>
-public partial class WorldStreamerNode : Node, IWorldStreamer
+public partial class WorldStreamerNode : Node, IWorldStreamer, IPlayerRestoreCoordinator
 {
     [Export] public RegionDefinition? ActiveRegion { get; set; }
 
@@ -43,15 +45,33 @@ public partial class WorldStreamerNode : Node, IWorldStreamer
     /// <summary>Max cell instantiations per frame — time-slices arrival bursts so they never spike a frame (§4.3).</summary>
     [Export] public int MaxCellInstancesPerFrame { get; set; } = 1;
 
+    /// <summary>Maximum main-thread time spent applying streaming transitions in one frame.</summary>
+    [Export(PropertyHint.Range, "0.1,8.0,0.1")] public double WorkBudgetMilliseconds { get; set; } = 1.5;
+
+    /// <summary>Expands visual prefetch at driving speed so fast vehicles cannot overrun world data.</summary>
+    [Export(PropertyHint.Range, "1.0,4.0,0.05")] public float DrivingPrefetchMultiplier { get; set; } = 1.75f;
+
+    [Export(PropertyHint.Range, "1.0,100.0,0.5")] public float DrivingSpeedThreshold { get; set; } = 8f;
+    [Export(PropertyHint.Range, "0,10,1")] public int MaxLoadRetries { get; set; } = 3;
+    [Export(PropertyHint.Range, "0.1,30.0,0.1")] public double RetryBaseDelaySeconds { get; set; } = 1.0;
+
     private readonly Dictionary<Vector2I, CellState> _cellStates = new();
     private readonly Dictionary<Vector2I, Node> _instancedCells = new();
+    private readonly Dictionary<Vector2I, Node> _collisionProxies = new();
     private readonly Dictionary<Vector2I, CellDefinition> _cellsByGrid = new();
+    private readonly List<KeyValuePair<Vector2I, CellDefinition>> _alwaysLoadedCells = new();
     private readonly Dictionary<Vector2I, List<Node3D>> _dynamicByCell = new();
+    private readonly Dictionary<Vector2I, LoadRetry> _loadRetries = new();
+    private readonly HashSet<Vector2I> _mainSceneRequested = new();
+    private readonly HashSet<Vector2I> _collisionSceneRequested = new();
+    private readonly HashSet<Vector2I> _candidateGrids = new();
+    private readonly List<StreamingWorkItem> _workItems = new();
     private readonly WorldStateStore _stateStore = new();
 
     // World-flags store: the game's consequence memory. Grouped with world state (§16.1), so the streamer
     // owns it, publishes it as a shared service, and enrolls it as a save participant alongside _stateStore.
     private readonly WorldFlagsService _worldFlags = new();
+    private VehiclePersistenceService? _vehiclePersistence;
 
     private ICellLoader? _loader;
     private Node3D? _player;
@@ -59,9 +79,70 @@ public partial class WorldStreamerNode : Node, IWorldStreamer
     private Vector2 _lastInterestSample;
     private bool _hasInterestSample;
     private int _instancesThisFrame;
+    private float _interestSpeed;
+    private double _streamTimeSeconds;
 
     private StreamingRings? _rings;
     private Vector4 _lastRingParams = new(float.NaN, float.NaN, float.NaN, float.NaN);
+
+    private readonly record struct LoadRetry(int Attempts, double RetryAtSeconds);
+
+    private struct StreamingWorkItem
+    {
+        public Vector2I Grid;
+        public CellDefinition Definition;
+        public CellState Current;
+        public CellState Target;
+        public float Distance;
+
+        public StreamingWorkItem(
+            Vector2I grid,
+            CellDefinition definition,
+            CellState current,
+            CellState target,
+            float distance)
+        {
+            Grid = grid;
+            Definition = definition;
+            Current = current;
+            Target = target;
+            Distance = distance;
+        }
+    }
+
+    private sealed class StreamingWorkComparer : IComparer<StreamingWorkItem>
+    {
+        public static readonly StreamingWorkComparer Instance = new();
+
+        public int Compare(StreamingWorkItem x, StreamingWorkItem y)
+        {
+            int urgency = Urgency(y).CompareTo(Urgency(x));
+            if (urgency != 0) return urgency;
+
+            int authoredPriority = y.Definition.StreamPriority.CompareTo(x.Definition.StreamPriority);
+            if (authoredPriority != 0) return authoredPriority;
+
+            int distance = x.Distance.CompareTo(y.Distance);
+            if (distance != 0) return distance;
+
+            int gridX = x.Grid.X.CompareTo(y.Grid.X);
+            return gridX != 0 ? gridX : x.Grid.Y.CompareTo(y.Grid.Y);
+        }
+
+        private static int Urgency(StreamingWorkItem item)
+        {
+            // Cancelling obsolete in-flight work is cheapest and most urgent. Upgrades then proceed
+            // nearest-ring first; ordinary unloads trail so arrival never waits behind cleanup.
+            if (item.Current == CellState.Loading && item.Target == CellState.Unloaded) return 500;
+            return item.Target switch
+            {
+                CellState.Active => 400,
+                CellState.Simulated => 300,
+                CellState.Visual => 200,
+                _ => 100,
+            };
+        }
+    }
 
     public WorldStateStore StateStore => _stateStore;
     public IReadOnlyDictionary<Vector2I, CellState> CellStates => _cellStates;
@@ -70,6 +151,7 @@ public partial class WorldStreamerNode : Node, IWorldStreamer
     public override void _EnterTree()
     {
         Services.Register<IWorldStreamer>(this);
+        Services.Register<IPlayerRestoreCoordinator>(this);
     }
 
     public override void _Ready()
@@ -90,6 +172,13 @@ public partial class WorldStreamerNode : Node, IWorldStreamer
             saveService.RegisterParticipant(_stateStore);
             // Flags restore first (RestoreOrder 10) so later modules can read them during their own restore.
             saveService.RegisterParticipant(_worldFlags);
+
+            _vehiclePersistence = new VehiclePersistenceService(
+                currentRegionId: () => CurrentRegionId ?? "unknown",
+                possessedVehicleId: ResolvePossessedVehicleId,
+                logger: message => GD.PushWarning(message));
+            Services.Register<VehiclePersistenceService>(_vehiclePersistence);
+            saveService.RegisterParticipant(_vehiclePersistence);
         }
     }
 
@@ -102,7 +191,19 @@ public partial class WorldStreamerNode : Node, IWorldStreamer
         {
             saveService.UnregisterParticipant(_stateStore);
             saveService.UnregisterParticipant(_worldFlags);
+            if (_vehiclePersistence != null)
+            {
+                saveService.UnregisterParticipant(_vehiclePersistence);
+            }
         }
+
+        if (_vehiclePersistence != null
+            && Services.TryGet<VehiclePersistenceService>(out var registeredVehicles)
+            && ReferenceEquals(registeredVehicles, _vehiclePersistence))
+        {
+            Services.Unregister<VehiclePersistenceService>();
+        }
+        _vehiclePersistence = null;
 
         // Symmetric with the _Ready registration; guard against clobbering a different instance (mirrors
         // the IWorldStreamer unregister below).
@@ -115,6 +216,82 @@ public partial class WorldStreamerNode : Node, IWorldStreamer
         {
             Services.Unregister<IWorldStreamer>();
         }
+
+        if (Services.TryGet<IPlayerRestoreCoordinator>(out var coordinator) && ReferenceEquals(coordinator, this))
+        {
+            Services.Unregister<IPlayerRestoreCoordinator>();
+        }
+    }
+
+    private static string? ResolvePossessedVehicleId()
+    {
+        return Services.TryGet<IPlayerController>(out var controller)
+            && controller?.PossessedEntity is IPersistentVehicle vehicle
+                ? vehicle.PersistentVehicleId
+                : null;
+    }
+
+    public void PrepareRegion(string regionId, Vector3 worldPosition)
+    {
+        if (!string.IsNullOrWhiteSpace(regionId)
+            && Services.TryGet<IContentDatabase>(out var content)
+            && content != null
+            && content.Regions.TryGet(regionId, out var definition)
+            && definition is RegionDefinition region
+            && !ReferenceEquals(region, ActiveRegion))
+        {
+            ActiveRegion = region;
+        }
+
+        // Prime the interest sample at the restored location. The restored possessable is moved there
+        // immediately afterward by PlayerControllerNode, so the next frame spatially warms this region
+        // without a bogus cross-map velocity projection.
+        _lastInterestSample = new Vector2(worldPosition.X, worldPosition.Z);
+        _hasInterestSample = false;
+    }
+
+    public string GetPersistentId(IPossessable possessable)
+    {
+        if (possessable is IPersistentVehicle vehicle)
+        {
+            return vehicle.PersistentVehicleId;
+        }
+        if (possessable is Node node)
+        {
+            if (node.HasMeta("persistent_id"))
+            {
+                return node.GetMeta("persistent_id").AsString();
+            }
+            return node.GetPath().ToString();
+        }
+        return possessable.GetType().FullName ?? possessable.GetType().Name;
+    }
+
+    public IPossessable? ResolvePossessable(string persistentId)
+    {
+        if (string.IsNullOrWhiteSpace(persistentId) || GetTree().CurrentScene == null) return null;
+
+        foreach (Node node in EnumerateTree(GetTree().CurrentScene))
+        {
+            if (node is IPossessable possessable
+                && persistentId.Equals(GetPersistentId(possessable), StringComparison.OrdinalIgnoreCase))
+            {
+                return possessable;
+            }
+        }
+        return null;
+    }
+
+    private static IEnumerable<Node> EnumerateTree(Node root)
+    {
+        yield return root;
+        foreach (Node child in root.GetChildren())
+        {
+            foreach (Node descendant in EnumerateTree(child))
+            {
+                yield return descendant;
+            }
+        }
     }
 
     public void SetLoader(ICellLoader loader)
@@ -126,23 +303,132 @@ public partial class WorldStreamerNode : Node, IWorldStreamer
     {
         if (ActiveRegion == null || _loader == null) return;
 
+        _streamTimeSeconds += Math.Max(0d, delta);
+
         EnsureCellIndex();
         ResolvePlayer();
 
         Vector2 interest = ComputeInterestPoint((float)delta);
         StreamingRings rings = GetRings();
-
         _instancesThisFrame = 0;
 
-        // Only cells that actually have a definition are considered (dictionary index, not a full-grid scan).
-        foreach (var (gridPos, cellDef) in _cellsByGrid)
-        {
-            Vector2 cellCenter = CellCenter(gridPos);
-            float distance = interest.DistanceTo(cellCenter);
-            CellState current = _cellStates.TryGetValue(gridPos, out var s) ? s : CellState.Unloaded;
-            CellState target = rings.EvaluateTarget(current, distance);
+        BuildPrioritizedWork(interest, rings);
 
-            StepCell(gridPos, cellDef, current, target);
+        long startedAt = Stopwatch.GetTimestamp();
+        foreach (var item in _workItems)
+        {
+            if (Stopwatch.GetElapsedTime(startedAt).TotalMilliseconds >= WorkBudgetMilliseconds)
+            {
+                break;
+            }
+
+            StepCell(item.Grid, item.Definition, item.Current, item.Target);
+        }
+    }
+
+    private void BuildPrioritizedWork(Vector2 interest, StreamingRings rings)
+    {
+        _candidateGrids.Clear();
+        _workItems.Clear();
+
+        float cellSize = Math.Max(1f, ActiveRegion!.CellSize);
+        float prefetchRadius = VisualRadius + HysteresisMargin;
+        if (_interestSpeed >= DrivingSpeedThreshold)
+        {
+            prefetchRadius *= DrivingPrefetchMultiplier;
+        }
+
+        int minX = Mathf.FloorToInt((interest.X - prefetchRadius) / cellSize) - 1;
+        int maxX = Mathf.FloorToInt((interest.X + prefetchRadius) / cellSize) + 1;
+        int minY = Mathf.FloorToInt((interest.Y - prefetchRadius) / cellSize) - 1;
+        int maxY = Mathf.FloorToInt((interest.Y + prefetchRadius) / cellSize) + 1;
+
+        // Query only the grid neighborhood around the interest point. Region size can grow without
+        // turning every frame into a linear scan across every authored cell.
+        for (int x = minX; x <= maxX; x++)
+        {
+            for (int y = minY; y <= maxY; y++)
+            {
+                var grid = new Vector2I(x, y);
+                if (_cellsByGrid.TryGetValue(grid, out var definition))
+                {
+                    AddWorkItem(grid, definition, interest, rings);
+                }
+            }
+        }
+
+        foreach (var pair in _alwaysLoadedCells)
+        {
+            AddWorkItem(pair.Key, pair.Value, interest, rings);
+        }
+
+        // Loaded/loading cells outside the neighborhood still need a downgrade/cancellation pass.
+        foreach (var pair in _cellStates)
+        {
+            if (pair.Value != CellState.Unloaded
+                && !_candidateGrids.Contains(pair.Key)
+                && _cellsByGrid.TryGetValue(pair.Key, out var definition))
+            {
+                AddWorkItem(pair.Key, definition, interest, rings);
+            }
+        }
+
+        _workItems.Sort(StreamingWorkComparer.Instance);
+        ApplyRegionBudgets();
+    }
+
+    private void AddWorkItem(
+        Vector2I grid,
+        CellDefinition definition,
+        Vector2 interest,
+        StreamingRings rings)
+    {
+        if (!_candidateGrids.Add(grid)) return;
+
+        float distance = interest.DistanceTo(CellCenter(grid));
+        CellState current = _cellStates.TryGetValue(grid, out var state) ? state : CellState.Unloaded;
+        CellState target = rings.EvaluateTarget(current, distance);
+        if (definition.AlwaysLoaded && target == CellState.Unloaded)
+        {
+            target = CellState.Visual;
+        }
+
+        _workItems.Add(new StreamingWorkItem(grid, definition, current, target, distance));
+    }
+
+    private void ApplyRegionBudgets()
+    {
+        int residentCells = 0;
+        int simulationCost = 0;
+        int maxResident = Math.Max(1, ActiveRegion!.MaxResidentCells);
+        int maxSimulation = Math.Max(1, ActiveRegion.MaxSimulationCost);
+
+        for (int index = 0; index < _workItems.Count; index++)
+        {
+            StreamingWorkItem item = _workItems[index];
+            if (item.Target == CellState.Unloaded) continue;
+
+            if (!item.Definition.AlwaysLoaded && residentCells >= maxResident)
+            {
+                item.Target = CellState.Unloaded;
+                _workItems[index] = item;
+                continue;
+            }
+
+            residentCells++;
+            if (item.Target is CellState.Active or CellState.Simulated)
+            {
+                int cost = Math.Max(1, item.Definition.SimulationCost);
+                if (simulationCost + cost > maxSimulation)
+                {
+                    item.Target = CellState.Visual;
+                    _workItems[index] = item;
+                }
+                else
+                {
+                    simulationCost += cost;
+                }
+            }
         }
     }
 
@@ -162,7 +448,25 @@ public partial class WorldStreamerNode : Node, IWorldStreamer
     {
         if (ReferenceEquals(_indexedRegion, ActiveRegion)) return;
 
+        if (_indexedRegion != null)
+        {
+            foreach (Vector2I grid in new List<Vector2I>(_instancedCells.Keys))
+            {
+                UnloadCell(grid, capture: true);
+            }
+            foreach (var pair in new List<KeyValuePair<Vector2I, CellState>>(_cellStates))
+            {
+                if (pair.Value == CellState.Loading && _cellsByGrid.TryGetValue(pair.Key, out var oldCell))
+                {
+                    CancelCellLoad(pair.Key, oldCell);
+                }
+            }
+            _cellStates.Clear();
+            _loadRetries.Clear();
+        }
+
         _cellsByGrid.Clear();
+        _alwaysLoadedCells.Clear();
         if (ActiveRegion != null)
         {
             foreach (var cell in ActiveRegion.Cells)
@@ -170,6 +474,10 @@ public partial class WorldStreamerNode : Node, IWorldStreamer
                 if (cell != null)
                 {
                     _cellsByGrid[cell.GridPosition] = cell;
+                    if (cell.AlwaysLoaded)
+                    {
+                        _alwaysLoadedCells.Add(new KeyValuePair<Vector2I, CellDefinition>(cell.GridPosition, cell));
+                    }
                 }
             }
         }
@@ -204,6 +512,7 @@ public partial class WorldStreamerNode : Node, IWorldStreamer
         {
             velocity = (pos2D - _lastInterestSample) / delta;
         }
+        _interestSpeed = velocity.Length();
         _lastInterestSample = pos2D;
         _hasInterestSample = true;
 
@@ -217,7 +526,7 @@ public partial class WorldStreamerNode : Node, IWorldStreamer
         return new Vector2((gridPos.X + 0.5f) * cellSize, (gridPos.Y + 0.5f) * cellSize);
     }
 
-    private string CellKey(Vector2I gridPos) => $"{ActiveRegion?.Id}_{gridPos.X}_{gridPos.Y}";
+    private string CellKey(Vector2I gridPos) => $"{_indexedRegion?.Id ?? ActiveRegion?.Id}_{gridPos.X}_{gridPos.Y}";
 
     private void StepCell(Vector2I gridPos, CellDefinition cellDef, CellState current, CellState target)
     {
@@ -226,27 +535,18 @@ public partial class WorldStreamerNode : Node, IWorldStreamer
             case CellState.Unloaded:
                 if (target != CellState.Unloaded)
                 {
-                    _cellStates[gridPos] = CellState.Loading;
-                    if (!string.IsNullOrEmpty(cellDef.ScenePath))
-                    {
-                        _loader?.RequestLoad(cellDef.ScenePath);
-                    }
+                    StartCellLoad(gridPos, cellDef);
                 }
                 break;
 
             case CellState.Loading:
                 if (target == CellState.Unloaded)
                 {
-                    // Interest point left before instantiation — abandon the load rather than
-                    // instantiate a cell nobody wants (H7 load-cancel).
-                    _cellStates[gridPos] = CellState.Unloaded;
+                    CancelCellLoad(gridPos, cellDef);
                 }
-                else if (_instancesThisFrame < MaxCellInstancesPerFrame
-                         && !string.IsNullOrEmpty(cellDef.ScenePath)
-                         && _loader != null
-                         && _loader.IsLoadComplete(cellDef.ScenePath))
+                else if (_instancesThisFrame < MaxCellInstancesPerFrame)
                 {
-                    InstantiateCell(gridPos, cellDef);
+                    AdvanceCellLoad(gridPos, cellDef);
                 }
                 break;
 
@@ -269,14 +569,135 @@ public partial class WorldStreamerNode : Node, IWorldStreamer
         }
     }
 
+    private void StartCellLoad(Vector2I gridPos, CellDefinition cellDef)
+    {
+        if (string.IsNullOrWhiteSpace(cellDef.ScenePath))
+        {
+            RecordLoadFailure(gridPos, cellDef, "cell has no scene path");
+            return;
+        }
+
+        if (_loadRetries.TryGetValue(gridPos, out var retry))
+        {
+            if (retry.Attempts > MaxLoadRetries || _streamTimeSeconds < retry.RetryAtSeconds)
+            {
+                return;
+            }
+        }
+
+        _cellStates[gridPos] = CellState.Loading;
+        if (!string.IsNullOrWhiteSpace(cellDef.CollisionScenePath))
+        {
+            _loader!.RequestLoad(cellDef.CollisionScenePath);
+            _collisionSceneRequested.Add(gridPos);
+        }
+        else
+        {
+            RequestMainScene(gridPos, cellDef);
+        }
+    }
+
+    private void AdvanceCellLoad(Vector2I gridPos, CellDefinition cellDef)
+    {
+        if (!string.IsNullOrWhiteSpace(cellDef.CollisionScenePath)
+            && !_collisionProxies.ContainsKey(gridPos))
+        {
+            CellLoadStatus collisionStatus = _loader!.GetLoadStatus(cellDef.CollisionScenePath);
+            if (collisionStatus == CellLoadStatus.Failed)
+            {
+                RecordLoadFailure(gridPos, cellDef, $"collision proxy '{cellDef.CollisionScenePath}' failed");
+                return;
+            }
+            if (collisionStatus != CellLoadStatus.Loaded) return;
+
+            Node? proxy = _loader.InstantiateCell(cellDef.CollisionScenePath);
+            if (proxy == null)
+            {
+                RecordLoadFailure(gridPos, cellDef, $"collision proxy '{cellDef.CollisionScenePath}' could not instantiate");
+                return;
+            }
+
+            proxy.Name = $"CollisionProxy_{gridPos.X}_{gridPos.Y}";
+            AddChild(proxy);
+            _collisionProxies[gridPos] = proxy;
+            _instancesThisFrame++;
+            RequestMainScene(gridPos, cellDef);
+
+            if (_instancesThisFrame >= MaxCellInstancesPerFrame) return;
+        }
+
+        if (!_mainSceneRequested.Contains(gridPos))
+        {
+            RequestMainScene(gridPos, cellDef);
+            return;
+        }
+
+        CellLoadStatus status = _loader!.GetLoadStatus(cellDef.ScenePath);
+        if (status == CellLoadStatus.Failed)
+        {
+            RecordLoadFailure(gridPos, cellDef, $"scene '{cellDef.ScenePath}' failed");
+        }
+        else if (status == CellLoadStatus.Loaded)
+        {
+            InstantiateCell(gridPos, cellDef);
+        }
+    }
+
+    private void RequestMainScene(Vector2I gridPos, CellDefinition cellDef)
+    {
+        if (_mainSceneRequested.Add(gridPos))
+        {
+            _loader!.RequestLoad(cellDef.ScenePath);
+        }
+    }
+
+    private void CancelCellLoad(Vector2I gridPos, CellDefinition cellDef)
+    {
+        if (_mainSceneRequested.Remove(gridPos))
+        {
+            _loader!.CancelLoad(cellDef.ScenePath);
+        }
+        if (_collisionSceneRequested.Remove(gridPos) && !string.IsNullOrWhiteSpace(cellDef.CollisionScenePath))
+        {
+            _loader!.CancelLoad(cellDef.CollisionScenePath);
+        }
+
+        RemoveCollisionProxy(gridPos);
+        _cellStates[gridPos] = CellState.Unloaded;
+    }
+
+    private void RecordLoadFailure(Vector2I gridPos, CellDefinition cellDef, string reason)
+    {
+        int attempts = _loadRetries.TryGetValue(gridPos, out var prior) ? prior.Attempts + 1 : 1;
+        double delay = RetryBaseDelaySeconds * Math.Pow(2d, Math.Min(attempts - 1, 5));
+        _loadRetries[gridPos] = new LoadRetry(attempts, _streamTimeSeconds + delay);
+
+        _mainSceneRequested.Remove(gridPos);
+        _collisionSceneRequested.Remove(gridPos);
+        RemoveCollisionProxy(gridPos);
+        _cellStates[gridPos] = CellState.Unloaded;
+
+        string retryMessage = attempts <= MaxLoadRetries
+            ? $"retry {attempts}/{MaxLoadRetries} in {delay:0.0}s"
+            : "retry budget exhausted";
+        GD.PushWarning($"[WorldStreamer] Cell {gridPos} ({cellDef.ScenePath}) load failed: {reason}; {retryMessage}.");
+    }
+
     private void InstantiateCell(Vector2I gridPos, CellDefinition cellDef)
     {
         var cellNode = _loader!.InstantiateCell(cellDef.ScenePath);
-        if (cellNode == null) return;
+        if (cellNode == null)
+        {
+            RecordLoadFailure(gridPos, cellDef, "loaded scene could not instantiate");
+            return;
+        }
 
         _instancesThisFrame++;
         AddChild(cellNode);
         _instancedCells[gridPos] = cellNode;
+        _mainSceneRequested.Remove(gridPos);
+        _collisionSceneRequested.Remove(gridPos);
+        _loadRetries.Remove(gridPos);
 
         // Freshly instanced cells enter Visual: render-only, processing disabled per doc §4.3.
         cellNode.ProcessMode = ProcessModeEnum.Disabled;
@@ -309,7 +730,18 @@ public partial class WorldStreamerNode : Node, IWorldStreamer
             _instancedCells.Remove(gridPos);
             _dynamicByCell.Remove(gridPos);
         }
+        RemoveCollisionProxy(gridPos);
+        _mainSceneRequested.Remove(gridPos);
+        _collisionSceneRequested.Remove(gridPos);
         _cellStates[gridPos] = CellState.Unloaded;
+    }
+
+    private void RemoveCollisionProxy(Vector2I gridPos)
+    {
+        if (_collisionProxies.Remove(gridPos, out var proxy) && IsInstanceValid(proxy))
+        {
+            proxy.QueueFree();
+        }
     }
 
     private void OnWorldStateRestored()
@@ -505,9 +937,19 @@ public partial class WorldStreamerNode : Node, IWorldStreamer
 
     private class GodotCellLoader : ICellLoader
     {
+        private readonly HashSet<string> _failedRequests = new(StringComparer.Ordinal);
+
         public void RequestLoad(string scenePath)
         {
-            ResourceLoader.LoadThreadedRequest(scenePath);
+            Error result = ResourceLoader.LoadThreadedRequest(scenePath);
+            if (result == Error.Ok)
+            {
+                _failedRequests.Remove(scenePath);
+            }
+            else
+            {
+                _failedRequests.Add(scenePath);
+            }
         }
 
         public bool IsLoadComplete(string scenePath)
@@ -515,9 +957,22 @@ public partial class WorldStreamerNode : Node, IWorldStreamer
             return ResourceLoader.LoadThreadedGetStatus(scenePath) == ResourceLoader.ThreadLoadStatus.Loaded;
         }
 
+        public CellLoadStatus GetLoadStatus(string scenePath)
+        {
+            if (_failedRequests.Contains(scenePath)) return CellLoadStatus.Failed;
+
+            return ResourceLoader.LoadThreadedGetStatus(scenePath) switch
+            {
+                ResourceLoader.ThreadLoadStatus.Loaded => CellLoadStatus.Loaded,
+                ResourceLoader.ThreadLoadStatus.InProgress => CellLoadStatus.Loading,
+                ResourceLoader.ThreadLoadStatus.Failed => CellLoadStatus.Failed,
+                _ => CellLoadStatus.NotRequested,
+            };
+        }
+
         public Node? InstantiateCell(string scenePath)
         {
-            var res = (PackedScene)ResourceLoader.LoadThreadedGet(scenePath);
+            var res = ResourceLoader.LoadThreadedGet(scenePath) as PackedScene;
             return res?.Instantiate();
         }
     }

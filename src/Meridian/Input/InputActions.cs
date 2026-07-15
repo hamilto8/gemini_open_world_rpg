@@ -1,3 +1,7 @@
+using System;
+using System.Collections.Generic;
+using Godot;
+
 namespace Meridian.Input;
 
 /// <summary>
@@ -22,6 +26,32 @@ public static class InputActions
         ("aim", "Aim"),
         ("reload", "Reload"),
         ("brake", "Vehicle Brake"),
+    };
+
+    /// <summary>Authoritative keyboard defaults, shared by bootstrap and restore-defaults.</summary>
+    public static readonly IReadOnlyDictionary<string, Key> DefaultKeyboard =
+        new Dictionary<string, Key>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["move_forward"] = Key.W,
+            ["move_backward"] = Key.S,
+            ["move_left"] = Key.A,
+            ["move_right"] = Key.D,
+            ["jump"] = Key.Space,
+            ["sprint"] = Key.Shift,
+            ["crouch"] = Key.Ctrl,
+            ["interact"] = Key.E,
+            ["reload"] = Key.R,
+            ["brake"] = Key.Space,
+        };
+
+    /// <summary>
+    /// Conflict scopes allow deliberate context-specific reuse such as Space for on-foot jump and
+    /// vehicle brake, while still rejecting two bindings that can fire in the same context.
+    /// </summary>
+    public static string ConflictScope(string action) => action switch
+    {
+        "brake" or "exit_vehicle" => "vehicle",
+        _ => "on_foot",
     };
 
     /// <summary>Fixed Xbox controller layout (button → what it does), for the reference panel.</summary>

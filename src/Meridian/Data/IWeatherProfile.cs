@@ -1,3 +1,6 @@
+using System;
+using System.Collections.Generic;
+
 namespace Meridian.Data;
 
 /// <summary>
@@ -8,4 +11,7 @@ public interface IWeatherProfile
 {
     /// <summary>Permanent snake_case id, unique within the weather-profile category (§19.9).</summary>
     string Id { get; }
+
+    /// <summary>Outgoing forecast targets used for cross-reference validation.</summary>
+    IReadOnlyList<string> TransitionWeatherIds => Array.Empty<string>();
 }

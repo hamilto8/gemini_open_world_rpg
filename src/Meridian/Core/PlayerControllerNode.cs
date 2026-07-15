@@ -21,14 +21,18 @@ public partial class PlayerControllerNode : Node, IPlayerController, IInventoryP
     private Vector2 _pendingLook;
     private bool _mouseCaptured;
     private InventorySaveParticipant? _inventorySaveParticipant;
+    private EquipmentModel? _equipment;
+    private QuickSlotModel? _quickSlots;
 
     public IPossessable? PossessedEntity => _possessedEntity;
 
     public InventoryModel Inventory => _inventory;
     public WeaponInstance? EquippedWeapon { get; set; }
+    public EquipmentModel? Equipment => _equipment;
+    public QuickSlotModel? QuickSlots => _quickSlots;
 
     public string ParticipantId => "PlayerState";
-    public int RestoreOrder => 100; // Restores last after streaming and world environments are ready
+    public int RestoreOrder => SaveRestoreOrder.Possession;
     public Type StateType => typeof(PlayerStateDto);
 
     public override void _EnterTree()
@@ -52,6 +56,16 @@ public partial class PlayerControllerNode : Node, IPlayerController, IInventoryP
                 SetRestoredEquippedWeapon,
                 message => GD.PushWarning(message));
             saveService.RegisterParticipant(_inventorySaveParticipant);
+
+            _equipment = new EquipmentModel(
+                ResolveItemDefinition,
+                () => GetPossessedStatBlock()?.Stats,
+                message => GD.PushWarning(message));
+            _quickSlots = new QuickSlotModel(
+                ContentExists,
+                message => GD.PushWarning(message));
+            saveService.RegisterParticipant(_equipment);
+            saveService.RegisterParticipant(_quickSlots);
         }
     }
 
@@ -64,8 +78,18 @@ public partial class PlayerControllerNode : Node, IPlayerController, IInventoryP
             {
                 saveService.UnregisterParticipant(_inventorySaveParticipant);
             }
+            if (_equipment != null)
+            {
+                saveService.UnregisterParticipant(_equipment);
+            }
+            if (_quickSlots != null)
+            {
+                saveService.UnregisterParticipant(_quickSlots);
+            }
         }
         _inventorySaveParticipant = null;
+        _equipment = null;
+        _quickSlots = null;
 
         // Symmetric unregistration so a torn-down controller can't hand out a stale reference (L2).
         if (Services.TryGet<IPlayerController>(out var pc) && ReferenceEquals(pc, this))
@@ -290,7 +314,7 @@ public partial class PlayerControllerNode : Node, IPlayerController, IInventoryP
             RotationY: rotY,
             Health: health,
             Stamina: stamina,
-            PossessedGuid: _possessedEntity is Node node ? node.Name : ""
+            PossessedGuid: GetPersistentPossessableId()
         );
     }
 
@@ -301,9 +325,25 @@ public partial class PlayerControllerNode : Node, IPlayerController, IInventoryP
             return;
         }
 
-        if (_possessedEntity is Node3D spatialNode)
+        var restorePosition = new Vector3(dto.PositionX, dto.PositionY, dto.PositionZ);
+        IPossessable? restoreTarget = _possessedEntity;
+        if (Services.TryGet<IPlayerRestoreCoordinator>(out var coordinator) && coordinator != null)
         {
-            spatialNode.GlobalPosition = new Vector3(dto.PositionX, dto.PositionY, dto.PositionZ);
+            coordinator.PrepareRegion(dto.CurrentRegionId, restorePosition);
+            if (!string.IsNullOrWhiteSpace(dto.PossessedGuid))
+            {
+                restoreTarget = coordinator.ResolvePossessable(dto.PossessedGuid);
+            }
+        }
+
+        if (restoreTarget != null && !ReferenceEquals(restoreTarget, _possessedEntity))
+        {
+            Possess(restoreTarget);
+        }
+
+        if (restoreTarget is Node3D spatialNode)
+        {
+            spatialNode.GlobalPosition = restorePosition;
             spatialNode.GlobalRotation = new Vector3(spatialNode.GlobalRotation.X, dto.RotationY, spatialNode.GlobalRotation.Z);
         }
 
@@ -314,6 +354,19 @@ public partial class PlayerControllerNode : Node, IPlayerController, IInventoryP
             stats.SetBaseStat("health", dto.Health);
             stats.SetBaseStat("stamina", dto.Stamina);
         }
+    }
+
+    private string GetPersistentPossessableId()
+    {
+        if (_possessedEntity == null)
+        {
+            return string.Empty;
+        }
+        if (Services.TryGet<IPlayerRestoreCoordinator>(out var coordinator) && coordinator != null)
+        {
+            return coordinator.GetPersistentId(_possessedEntity);
+        }
+        return _possessedEntity is Node node ? node.Name : _possessedEntity.GetType().Name;
     }
 
     private StatBlockNode? GetPossessedStatBlock()
@@ -329,6 +382,17 @@ public partial class PlayerControllerNode : Node, IPlayerController, IInventoryP
             return definition;
         }
         return null;
+    }
+
+    private bool ContentExists(string id)
+    {
+        if (!Services.TryGet<IContentDatabase>(out var database) || database == null)
+        {
+            return false;
+        }
+        return database.Items.TryGet(id, out _)
+            || database.Weapons.TryGet(id, out _)
+            || database.Quests.TryGet(id, out _);
     }
 
     private void SetRestoredEquippedWeapon(WeaponInstance? weapon)

@@ -50,42 +50,6 @@ public partial class RemoveItemActionResource : GameActionResource
     public override IGameAction ToAction() => new RemoveItemAction(ItemId, Count);
 }
 
-/// <summary>Wrapper for <see cref="GrantXpAction"/>.</summary>
-[GlobalClass]
-public partial class GrantXpActionResource : GameActionResource
-{
-    /// <summary>XP amount to grant.</summary>
-    [Export] public int Amount { get; set; } = 1;
-
-    /// <inheritdoc />
-    public override IGameAction ToAction() => new GrantXpAction(Amount);
-}
-
-/// <summary>Wrapper for <see cref="SetWorldFlagAction"/>.</summary>
-[GlobalClass]
-public partial class SetWorldFlagActionResource : GameActionResource
-{
-    /// <summary>Flag id to set.</summary>
-    [Export] public string FlagId { get; set; } = "";
-
-    /// <summary>Value to store.</summary>
-    [Export] public bool Value { get; set; } = true;
-
-    /// <inheritdoc />
-    public override IGameAction ToAction() => new SetWorldFlagAction(FlagId, Value);
-}
-
-/// <summary>Wrapper for <see cref="StartQuestAction"/>.</summary>
-[GlobalClass]
-public partial class StartQuestActionResource : GameActionResource
-{
-    /// <summary>Quest id to start.</summary>
-    [Export] public string QuestId { get; set; } = "";
-
-    /// <inheritdoc />
-    public override IGameAction ToAction() => new StartQuestAction(QuestId);
-}
-
 /// <summary>Wrapper for <see cref="PlaySoundCueAction"/>.</summary>
 [GlobalClass]
 public partial class PlaySoundCueActionResource : GameActionResource
@@ -95,17 +59,6 @@ public partial class PlaySoundCueActionResource : GameActionResource
 
     /// <inheritdoc />
     public override IGameAction ToAction() => new PlaySoundCueAction(CueId);
-}
-
-/// <summary>Wrapper for <see cref="ShowNotificationAction"/>.</summary>
-[GlobalClass]
-public partial class ShowNotificationActionResource : GameActionResource
-{
-    /// <summary>Message to display.</summary>
-    [Export(PropertyHint.MultilineText)] public string Message { get; set; } = "";
-
-    /// <inheritdoc />
-    public override IGameAction ToAction() => new ShowNotificationAction(Message);
 }
 
 /// <summary>Wrapper for <see cref="TeleportPlayerAction"/>. Exposes a Vector3, mapped to primitive floats.</summary>

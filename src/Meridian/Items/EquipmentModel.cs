@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using Meridian.Core;
 using Meridian.Data;
+using Meridian.Core.Save;
 
 namespace Meridian.Items;
 
@@ -10,13 +11,30 @@ namespace Meridian.Items;
 /// Updates the host StatBlock with equippable item modifiers.
 /// Enforces Section 7.3 requirements.
 /// </summary>
-public class EquipmentModel
+public class EquipmentModel : ISaveParticipant
 {
     private readonly Dictionary<string, ItemInstance> _slots = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, IItemDefinition> _definitions = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, Modifier> _appliedModifiers = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Func<string, IItemDefinition?>? _definitionResolver;
+    private readonly Func<StatBlock?>? _statsAccessor;
+    private readonly Action<string>? _logger;
 
     public IReadOnlyDictionary<string, ItemInstance> Slots => _slots;
+
+    public string ParticipantId => "PlayerEquipment";
+    public int RestoreOrder => SaveRestoreOrder.Equipment;
+    public Type StateType => typeof(EquipmentStateDto);
+
+    public EquipmentModel(
+        Func<string, IItemDefinition?>? definitionResolver = null,
+        Func<StatBlock?>? statsAccessor = null,
+        Action<string>? logger = null)
+    {
+        _definitionResolver = definitionResolver;
+        _statsAccessor = statsAccessor;
+        _logger = logger;
+    }
 
     public void RegisterDefinition(IItemDefinition definition)
     {
@@ -91,5 +109,66 @@ public class EquipmentModel
         }
 
         return true;
+    }
+
+    public object CaptureState()
+    {
+        var slots = new Dictionary<string, ItemInstanceDto>(StringComparer.OrdinalIgnoreCase);
+        foreach (var (slotId, item) in _slots)
+        {
+            slots[slotId] = ItemInstanceDtoMapper.ToDto(item);
+        }
+        return new EquipmentStateDto(slots);
+    }
+
+    public void RestoreState(object stateDto)
+    {
+        if (stateDto is not EquipmentStateDto dto)
+        {
+            throw new ArgumentException("Expected equipment state.", nameof(stateDto));
+        }
+
+        StatBlock? stats = _statsAccessor?.Invoke();
+        if (stats != null)
+        {
+            foreach (string slotId in new List<string>(_slots.Keys))
+            {
+                UnequipItem(slotId, stats);
+            }
+        }
+        else
+        {
+            _slots.Clear();
+            _appliedModifiers.Clear();
+        }
+
+        foreach (var (slotId, itemDto) in dto.Slots ?? new Dictionary<string, ItemInstanceDto>())
+        {
+            ItemInstance item = ItemInstanceDtoMapper.FromDto(itemDto);
+            IItemDefinition? definition = _definitionResolver?.Invoke(item.DefinitionId);
+            if (definition != null)
+            {
+                RegisterDefinition(definition);
+            }
+
+            if (stats != null && _definitions.ContainsKey(item.DefinitionId))
+            {
+                if (!EquipItem(slotId, item, stats))
+                {
+                    _logger?.Invoke($"[EquipmentSave] '{item.DefinitionId}' is no longer compatible with slot '{slotId}'; preserved without effects.");
+                    _slots[slotId] = item;
+                }
+            }
+            else
+            {
+                // Explicit unknown-content policy: keep the stable id and instance payload in its slot,
+                // but do not invent gameplay modifiers for content absent from the current build.
+                _slots[slotId] = item;
+                if (definition == null)
+                {
+                    _logger?.Invoke($"[EquipmentSave] Unknown item '{item.DefinitionId}' preserved in slot '{slotId}'.");
+                }
+            }
+        }
     }
 }

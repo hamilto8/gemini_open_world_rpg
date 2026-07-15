@@ -3,6 +3,7 @@ using Meridian.Environment;
 using Meridian.Items;
 using Meridian.Quests;
 using Meridian.World;
+using Meridian.Factions;
 
 namespace Meridian.Core.Logic;
 
@@ -92,5 +93,17 @@ public sealed class ServicesConditionContext : IConditionContext
         }
 
         return quests.GetQuestState(questId).ToString();
+    }
+
+    public int GetFactionReputation(string factionId)
+    {
+        if (string.IsNullOrEmpty(factionId)
+            || !Services.TryGet<IFactionReputationService>(out var factions)
+            || factions is null)
+        {
+            return 0;
+        }
+
+        return factions.GetReputation(factionId);
     }
 }

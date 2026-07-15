@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using Meridian.Core.Save;
 
 namespace Meridian.Core;
 
@@ -8,9 +9,10 @@ namespace Meridian.Core;
 /// Decoupled from Godot for unit testing.
 /// Enforces Section 17.1 and 17.3 requirements.
 /// </summary>
-public class ProgressionManager
+public class ProgressionManager : ISaveParticipant
 {
     private readonly IProgressionProfile _profile;
+    private readonly Func<StatBlock?>? _statsAccessor;
     private readonly HashSet<string> _unlockedPerks = new(StringComparer.OrdinalIgnoreCase);
 
     private int _level = 1;
@@ -25,9 +27,14 @@ public class ProgressionManager
     public event Action<int>? LevelChanged;
     public event Action<int>? XpChanged;
 
-    public ProgressionManager(IProgressionProfile profile)
+    public string ParticipantId => "PlayerProgression";
+    public int RestoreOrder => SaveRestoreOrder.Progression;
+    public Type StateType => typeof(ProgressionStateDto);
+
+    public ProgressionManager(IProgressionProfile profile, Func<StatBlock?>? statsAccessor = null)
     {
         _profile = profile ?? throw new ArgumentNullException(nameof(profile));
+        _statsAccessor = statsAccessor;
     }
 
     public int GetXpForNextLevel()
@@ -99,6 +106,45 @@ public class ProgressionManager
                 sourceTag: $"perk_{perkId}"
             ));
         }
+    }
+
+    public object CaptureState()
+    {
+        return new ProgressionStateDto(
+            _level,
+            _currentXp,
+            _skillPoints,
+            new List<string>(_unlockedPerks));
+    }
+
+    public void RestoreState(object stateDto)
+    {
+        if (stateDto is not ProgressionStateDto dto)
+        {
+            throw new ArgumentException("Expected progression state.", nameof(stateDto));
+        }
+
+        _level = Math.Clamp(dto.Level, 1, _profile.MaxLevel);
+        _currentXp = Math.Max(0, dto.CurrentXp);
+        _skillPoints = Math.Max(0, dto.SkillPoints);
+        _unlockedPerks.Clear();
+
+        StatBlock? stats = _statsAccessor?.Invoke();
+        foreach (string perkId in dto.UnlockedPerkIds ?? new List<string>())
+        {
+            if (string.IsNullOrWhiteSpace(perkId) || !_unlockedPerks.Add(perkId))
+            {
+                continue;
+            }
+            if (stats != null)
+            {
+                stats.RemoveModifierBySource($"perk_{perkId}");
+                ApplyPerkModifier(perkId, stats);
+            }
+        }
+
+        LevelChanged?.Invoke(_level);
+        XpChanged?.Invoke(_currentXp);
     }
 }
 

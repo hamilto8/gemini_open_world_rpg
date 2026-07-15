@@ -1,0 +1,15 @@
+{
+  "Header": {
+    "SaveVersion": 1,
+    "GameVersion": "0.9.0-fixture",
+    "Timestamp": "2025-01-02T03:04:05Z",
+    "PlaytimeSeconds": 42,
+    "LocationName": "Archived Harbor",
+    "ThumbnailPath": ""
+  },
+  "ParticipantStatesJson": {
+    "PlayerState": "{\"CurrentRegionId\":\"harbor_town\",\"PositionX\":12.5,\"PositionY\":1.0,\"PositionZ\":-8.0,\"RotationY\":0.25,\"Health\":73.0,\"Stamina\":44.0,\"PossessedGuid\":\"avatar_player\"}",
+    "WorldFlags": "{\"Flags\":{\"gate_opened\":\"true\"}}",
+    "RetiredDlcModule": "{\"artifactId\":\"dlc_relic_01\",\"charges\":3}"
+  }
+}

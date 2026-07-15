@@ -38,7 +38,7 @@ public partial class Game : Node
         GD.Print("[GameScene] Press the Backquote/Tilde (`) key to open the Debug Console.");
     }
 
-    private static void ValidateContent()
+    private void ValidateContent()
     {
         string projectRoot = ProjectSettings.GlobalizePath("res://");
         var validator = new ContentValidator(projectRoot);
@@ -52,6 +52,11 @@ public partial class Game : Node
         foreach (var error in errors)
         {
             GD.PushError($"[ContentValidator] {error}");
+        }
+
+        if (DisplayServer.GetName().Equals("headless", System.StringComparison.OrdinalIgnoreCase))
+        {
+            GetTree().Quit(2);
         }
     }
 }

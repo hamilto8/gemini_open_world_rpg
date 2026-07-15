@@ -1,4 +1,5 @@
 using Godot;
+using System.Collections.Generic;
 
 namespace Meridian.Data;
 
@@ -19,4 +20,23 @@ public partial class WeatherProfile : Resource, IWeatherProfile
     [Export] public Color LightColor { get; set; } = Colors.White;
 
     [Export] public float MoveSpeedModifier { get; set; } = 0f; // negative value for slow, e.g. -0.15f for 15% slow in rain
+
+    [ExportGroup("Forecast")]
+    [Export] public Godot.Collections.Array<WeatherTransitionResource> Transitions { get; set; } = new();
+
+    IReadOnlyList<string> IWeatherProfile.TransitionWeatherIds
+    {
+        get
+        {
+            var ids = new List<string>(Transitions.Count);
+            foreach (var transition in Transitions)
+            {
+                if (transition != null && !string.IsNullOrWhiteSpace(transition.TargetWeatherId))
+                {
+                    ids.Add(transition.TargetWeatherId);
+                }
+            }
+            return ids;
+        }
+    }
 }

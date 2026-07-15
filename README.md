@@ -4,7 +4,7 @@ Project Meridian is a **theme-agnostic, framework-first architecture** for a 3D 
 
 The framework is designed around strict data-driven patterns to allow solo developers and small teams to expand content (weapons, items, vehicles, regions, quests) with **zero modifications to the core C# codebase** ("new files + one index entry, zero edits to core C#").
 
-> **Readiness status (July 14, 2026):** this repository is a strong framework prototype, not yet a story/content-team handoff build. See the [current readiness audit](docs/HANDOFF_READINESS_AUDIT_2026-07-14.md) for verified capabilities, remediation completed in this pass, and remaining blockers.
+> **Readiness status (July 14, 2026):** the engineering framework is ready for human-led story, art, audio, world, and UI-content production. See the [handoff completion report](docs/HANDOFF_COMPLETION_2026-07-14.md) for acceptance evidence and deliberately deferred creative work; the [original readiness audit](docs/HANDOFF_READINESS_AUDIT_2026-07-14.md) is retained as the remediation baseline.
 
 ---
 
@@ -95,11 +95,11 @@ godot --path .
 ## 🗺️ Roadmap & Phasing
 
 - [x] **Phase 0: Foundations** — Walking skeleton, core services, input contexts, save skeleton, diagnostics, and validator foundations.
-- [ ] **Phase 1: On-Foot Core** — Functional gray-box locomotion, camera, stats, and aiming; final animation, combat lifecycle, and feedback remain.
-- [ ] **Phase 2: Items & Weapons** — Domain models and a hitscan prototype exist; production inventory/equipment UI, data-driven upgrades, and crafting remain.
-- [ ] **Phase 3: World & Streaming** — A wired one-cell streaming smoke path now exists; authoring schema, priority/time budgets, terrain, and stress validation remain.
-- [ ] **Phase 4: Vehicles v1** — A board/drive/exit prototype exists; persistence, damage, safe exit, camera polish, and production HUD remain.
-- [ ] **Phase 5: Time & Weather v1** — Clock/weather primitives exist; visual day/night, forecast scheduling, and authored effects remain.
-- [ ] **Phase 6: Quests, Dialogue & NPC Life** — Tested domain primitives exist but are not runtime-composed into the shipped scene.
-- [ ] **Phase 7: Systems Depth** — Partial progression, fast-travel, and music primitives exist; the phase exit criteria are not met.
-- [ ] **Phase 8: Content & Polish** — Content, accessibility integration, UI art/theme, localization, profiling, and polish remain.
+- [x] **Phase 1: On-Foot Framework** — Gray-box locomotion/camera/stats/aiming plus shared damage, death, respawn, and feedback hooks.
+- [x] **Phase 2: Items & Weapons Framework** — Inventory/equipment/quick slots, hitscan combat, upgrades, instance-safe persistence, and authored UI surfaces.
+- [x] **Phase 3: World & Streaming Framework** — Spatial priority streaming, time/residency/simulation budgets, collision-first vehicle prefetch, persistence, and recovery.
+- [x] **Phase 4: Vehicles v1 Framework** — Possession, driving/camera/HUD, damage/respawn, safe exit, and fleet persistence.
+- [x] **Phase 5: Time & Weather v1 Framework** — Clock, schedules, saved deterministic forecast, weather gameplay effects, and day/night presentation.
+- [x] **Phase 6: Quests, Dialogue & NPC Life Framework** — Typed indexes, runtime composition, shared conditions/actions, saves, authored UI, and an interactable sample.
+- [x] **Phase 7: Systems Depth Framework** — Progression, faction reputation, fast travel/discoveries, scheduled events, save compatibility, and content validation.
+- [ ] **Phase 8: Human Content & Final Polish** — Final story/world/art/animation/audio/UI art, localization languages, target-hardware profiling, and certification.

@@ -38,6 +38,27 @@ public sealed class GiveItemAction : IGameAction
     }
 }
 
+/// <summary>Adjusts the player's standing with an authored faction.</summary>
+public sealed class ModifyFactionReputationAction : IGameAction
+{
+    private readonly string? _factionId;
+    private readonly int _amount;
+
+    public ModifyFactionReputationAction(string factionId, int amount)
+    {
+        _factionId = factionId;
+        _amount = amount;
+    }
+
+    public void Execute(IActionContext context)
+    {
+        if (context is not null && !string.IsNullOrEmpty(_factionId) && _amount != 0)
+        {
+            context.ModifyFactionReputation(_factionId, _amount);
+        }
+    }
+}
+
 /// <summary>Removes a quantity of an item from the player.</summary>
 public sealed class RemoveItemAction : IGameAction
 {

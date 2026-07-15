@@ -1,6 +1,30 @@
-[gd_resource type="Resource" script_class="WeatherProfile" load_steps=2 format=3 uid="uid://weather_clear"]
+[gd_resource type="Resource" script_class="WeatherProfile" load_steps=6 format=3 uid="uid://weather_clear"]
 
 [ext_resource type="Script" path="res://src/Meridian/Data/WeatherProfile.cs" id="1_script"]
+[ext_resource type="Script" path="res://src/Meridian/Data/WeatherTransitionResource.cs" id="2_transition"]
+
+[sub_resource type="Resource" id="Transition_clear"]
+script = ExtResource("2_transition")
+TargetWeatherId = "clear"
+Weight = 0.45
+MinDurationGameMinutes = 180
+MaxDurationGameMinutes = 420
+
+[sub_resource type="Resource" id="Transition_rain"]
+script = ExtResource("2_transition")
+TargetWeatherId = "rain"
+Weight = 0.35
+MinDurationGameMinutes = 90
+MaxDurationGameMinutes = 240
+TransitionSeconds = 12.0
+
+[sub_resource type="Resource" id="Transition_fog"]
+script = ExtResource("2_transition")
+TargetWeatherId = "fog"
+Weight = 0.2
+MinDurationGameMinutes = 60
+MaxDurationGameMinutes = 180
+TransitionSeconds = 10.0
 
 [resource]
 script = ExtResource("1_script")
@@ -9,3 +33,4 @@ FogDensity = 0.001
 FogColor = Color(0.529412, 0.807843, 0.921569, 1)
 LightColor = Color(1, 1, 1, 1)
 MoveSpeedModifier = 0.0
+Transitions = Array[ExtResource("2_transition")]([SubResource("Transition_clear"), SubResource("Transition_rain"), SubResource("Transition_fog")])

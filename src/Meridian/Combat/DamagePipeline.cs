@@ -1,4 +1,5 @@
 using System;
+using Meridian.Core;
 
 namespace Meridian.Combat;
 
@@ -26,4 +27,30 @@ public static class DamagePipeline
         float raw = amount * ZoneMultiplier(zone);
         return Math.Max(1.0f, raw - armor);
     }
+
+    /// <summary>
+    /// Applies the canonical mitigation/lifecycle calculation to any entity StatBlock. Players,
+    /// NPCs, dummies, and stat-backed vehicles use this one path rather than reimplementing combat.
+    /// </summary>
+    public static DamageApplicationResult Apply(StatBlock stats, DamageInfo info)
+    {
+        ArgumentNullException.ThrowIfNull(stats);
+
+        float previousHealth = Math.Max(0f, stats.GetStat("health"));
+        if (previousHealth <= 0f)
+        {
+            return new DamageApplicationResult(0f, 0f, true, false);
+        }
+
+        float applied = Mitigate(Math.Max(0f, info.Amount), info.Zone, Math.Max(0f, stats.GetStat("armor")));
+        float newHealth = Math.Max(0f, previousHealth - applied);
+        stats.SetBaseStat("health", newHealth);
+        return new DamageApplicationResult(applied, newHealth, newHealth <= 0f, true);
+    }
 }
+
+public readonly record struct DamageApplicationResult(
+    float AppliedDamage,
+    float NewHealth,
+    bool IsDead,
+    bool WasApplied);

@@ -35,6 +35,7 @@ radial_segments = 20
 [node name="TestBuggy" type="CharacterBody3D"]
 script = ExtResource("1_script")
 ProfileResource = ExtResource("2_handling")
+PersistentVehicleId = "harbor_test_buggy"
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.6, 0)

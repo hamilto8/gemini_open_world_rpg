@@ -15,4 +15,7 @@ public partial class QuestDefinition : Resource
 
     [Export] public Godot.Collections.Array<QuestObjectiveResource> Objectives { get; set; } = new();
     [Export] public Godot.Collections.Array<QuestRewardResource> Rewards { get; set; } = new();
+    [Export] public Godot.Collections.Array<ConditionResource> StartConditions { get; set; } = new();
+    [Export] public Godot.Collections.Array<GameActionResource> OnAcceptActions { get; set; } = new();
+    [Export] public Godot.Collections.Array<GameActionResource> OnCompleteActions { get; set; } = new();
 }

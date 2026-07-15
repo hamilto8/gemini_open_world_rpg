@@ -5,6 +5,7 @@ using Meridian.Core;
 using Meridian.Core.Save;
 using Meridian.Items;
 using Meridian.Core.Registry;
+using Meridian.Core.Logic;
 
 namespace Meridian.Quests;
 
@@ -26,6 +27,8 @@ public class QuestManager : ISaveParticipant
     private readonly Dictionary<string, QuestState> _questStates = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, Dictionary<string, int>> _objectiveProgress = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, IQuestDefinition> _definitions = new(StringComparer.OrdinalIgnoreCase);
+    private readonly IConditionContext? _conditionContext;
+    private readonly IActionContext? _actionContext;
 
     public event Action<string, QuestState>? QuestStateChanged;
     public event Action<string, string, int>? ObjectiveProgressChanged;
@@ -35,6 +38,12 @@ public class QuestManager : ISaveParticipant
     public string ParticipantId => "Quests";
     public int RestoreOrder => 50;
     public Type StateType => typeof(QuestSaveDto);
+
+    public QuestManager(IConditionContext? conditionContext = null, IActionContext? actionContext = null)
+    {
+        _conditionContext = conditionContext;
+        _actionContext = actionContext;
+    }
 
     public void RegisterQuest(IQuestDefinition definition)
     {
@@ -60,6 +69,10 @@ public class QuestManager : ISaveParticipant
     {
         if (!_definitions.TryGetValue(questId, out var def)) return false;
         if (GetQuestState(questId) != QuestState.NotStarted) return false;
+        if (def.StartConditions.Count > 0 && (_conditionContext is null || !AllConditionsPass(def.StartConditions)))
+        {
+            return false;
+        }
 
         _questStates[questId] = QuestState.Active;
         _objectiveProgress[questId] = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
@@ -70,6 +83,7 @@ public class QuestManager : ISaveParticipant
         }
 
         QuestStateChanged?.Invoke(questId, QuestState.Active);
+        ExecuteActions(def.OnAcceptActions);
 
         if (Services.TryGet<IEventBus>(out var eventBus) && eventBus != null)
         {
@@ -126,12 +140,39 @@ public class QuestManager : ISaveParticipant
 
         _questStates[questId] = QuestState.Completed;
         GrantRewards(def);
+        ExecuteActions(def.OnCompleteActions);
 
         QuestStateChanged?.Invoke(questId, QuestState.Completed);
 
         if (Services.TryGet<IEventBus>(out var eventBus) && eventBus != null)
         {
             eventBus.Publish(new QuestStateChangedEvent(questId, QuestState.Completed));
+        }
+    }
+
+    private bool AllConditionsPass(IReadOnlyList<ICondition> conditions)
+    {
+        foreach (var condition in conditions)
+        {
+            if (condition is null || !condition.Evaluate(_conditionContext!))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private void ExecuteActions(IReadOnlyList<IGameAction> actions)
+    {
+        if (_actionContext is null)
+        {
+            return;
+        }
+
+        foreach (var action in actions)
+        {
+            action?.Execute(_actionContext);
         }
     }
 

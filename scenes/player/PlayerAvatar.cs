@@ -13,8 +13,12 @@ namespace Meridian.Player;
 /// Implements IPossessable to receive and execute controller inputs.
 /// Enforces Section 5.2 composition rules.
 /// </summary>
-public partial class PlayerAvatar : CharacterBody3D, IPossessable, IWeaponHolder
+public partial class PlayerAvatar : CharacterBody3D, IPossessable, IWeaponHolder, IDamageable, IHitZoneResolver
 {
+    [Export] public string PersistentId { get; set; } = "player";
+    [Export] public float RespawnSeconds { get; set; } = 3f;
+    [Export] public float HeadHeightThreshold { get; set; } = 1.55f;
+
     private StatBlockNode? _stats;
     private MovementMotor? _motor;
     private CameraRig? _cameraRig;
@@ -25,9 +29,16 @@ public partial class PlayerAvatar : CharacterBody3D, IPossessable, IWeaponHolder
 
     private readonly LocomotionStateMachine _hsm = new();
     private InputFrame _lastInput;
+    private Vector3 _respawnPosition;
+    private float _respawnYaw;
+    private float _respawnRemaining;
+    private bool _isDead;
 
     public override void _Ready()
     {
+        SetMeta("persistent_id", PersistentId);
+        _respawnPosition = GlobalPosition;
+        _respawnYaw = GlobalRotation.Y;
         _stats = GetNodeOrNull<StatBlockNode>("StatBlock");
         _motor = GetNodeOrNull<MovementMotor>("MovementMotor");
         _cameraRig = GetNodeOrNull<CameraRig>("CameraRig");
@@ -37,7 +48,8 @@ public partial class PlayerAvatar : CharacterBody3D, IPossessable, IWeaponHolder
 
         // Automatically bind or find HUD in UILayer
         var root = GetTree().CurrentScene;
-        _hud = root.GetNodeOrNull<MinimalHud>("UILayer/MinimalHud");
+        _hud = root.GetNodeOrNull<MinimalHud>("UILayer/MinimalHud")
+            ?? root.GetNodeOrNull<MinimalHud>("UILayer/UIShell/Hud");
 
         // Drive HUD health/stamina from StatBlock changes rather than polling every physics frame (L11).
         if (_stats != null)
@@ -120,6 +132,16 @@ public partial class PlayerAvatar : CharacterBody3D, IPossessable, IWeaponHolder
     {
         if (_motor == null || _stats == null) return;
 
+        if (_isDead)
+        {
+            _respawnRemaining -= (float)delta;
+            if (_respawnRemaining <= 0f)
+            {
+                Respawn();
+            }
+            return;
+        }
+
         float stamina = _stats.GetStat("stamina");
 
         // 1. Update Locomotion HSM
@@ -171,5 +193,50 @@ public partial class PlayerAvatar : CharacterBody3D, IPossessable, IWeaponHolder
                 _weapon.Fire(origin, direction);
             }
         }
+    }
+
+    public HitZone ResolveHitZone(Vector3 worldHitPosition)
+        => worldHitPosition.Y - GlobalPosition.Y >= HeadHeightThreshold ? HitZone.Head : HitZone.Body;
+
+    public void ApplyDamage(DamageInfo info)
+    {
+        if (_stats == null || _isDead) return;
+
+        DamageApplicationResult result = DamagePipeline.Apply(_stats.Stats, info);
+        if (!result.WasApplied) return;
+
+        PublishDamage(result, info);
+        if (result.IsDead)
+        {
+            _isDead = true;
+            _respawnRemaining = Math.Max(0.1f, RespawnSeconds);
+            _lastInput = default;
+            Velocity = Vector3.Zero;
+        }
+    }
+
+    private static void PublishDamage(DamageApplicationResult result, DamageInfo info)
+    {
+        if (Services.TryGet<IEventBus>(out var eventBus) && eventBus != null)
+        {
+            eventBus.Publish(new DamageDealtEvent(
+                "Player",
+                result.AppliedDamage,
+                info.Zone is HitZone.Head or HitZone.Weakpoint,
+                result.NewHealth,
+                result.IsDead));
+        }
+    }
+
+    private void Respawn()
+    {
+        if (_stats == null) return;
+
+        _stats.SetBaseStat("health", _stats.GetStat("max_health"));
+        GlobalPosition = _respawnPosition;
+        GlobalRotation = new Vector3(GlobalRotation.X, _respawnYaw, GlobalRotation.Z);
+        Velocity = Vector3.Zero;
+        _isDead = false;
+        _respawnRemaining = 0f;
     }
 }

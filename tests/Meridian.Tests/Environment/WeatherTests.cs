@@ -53,4 +53,27 @@ public class WeatherTests
         stats.RemoveModifier(rainModifier);
         Assert.Equal(10.0f, stats.GetStat("move_speed"));
     }
+
+    [Fact]
+    public void Forecast_ShouldBeDeterministicAndRestorable()
+    {
+        WeatherForecastChoice[] choices =
+        {
+            new("clear", 0.5f, 1f, 60, 120, 5f),
+            new("rain", 0.5f, 0.8f, 30, 90, 10f),
+        };
+        var first = new DeterministicWeatherForecast(42);
+        var second = new DeterministicWeatherForecast(42);
+
+        WeatherForecastSelection firstSelection = first.Select(choices, "clear");
+        WeatherForecastSelection secondSelection = second.Select(choices, "clear");
+
+        Assert.Equal(firstSelection, secondSelection);
+        uint checkpoint = first.State;
+        WeatherForecastSelection expectedNext = first.Select(choices, "clear");
+
+        var restored = new DeterministicWeatherForecast(1);
+        restored.RestoreState(checkpoint);
+        Assert.Equal(expectedNext, restored.Select(choices, "clear"));
+    }
 }

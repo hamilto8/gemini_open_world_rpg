@@ -1,0 +1,11 @@
+[gd_resource type="Resource" script_class="ProgressionProfile" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://src/Meridian/Data/ProgressionProfile.cs" id="1_script"]
+
+[resource]
+script = ExtResource("1_script")
+Id = "default_progression"
+BaseXpRequired = 100
+XpExponent = 1.5
+MaxLevel = 50
+SkillPointsPerLevel = 2

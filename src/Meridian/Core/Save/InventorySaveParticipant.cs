@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Globalization;
 using Meridian.Items;
 
 namespace Meridian.Core.Save;
@@ -40,14 +39,14 @@ public sealed class InventorySaveParticipant : ISaveParticipant
         var items = new List<ItemInstanceDto>(_inventory.Items.Count);
         foreach (var item in _inventory.Items)
         {
-            items.Add(ToDto(item));
+            items.Add(ItemInstanceDtoMapper.ToDto(item));
         }
 
         WeaponInstance? equipped = _getEquippedWeapon();
         return new InventoryStateDto(
             _inventory.MaxWeight,
             items,
-            equipped == null ? null : ToDto(equipped));
+            equipped == null ? null : ItemInstanceDtoMapper.ToDto(equipped));
     }
 
     public void RestoreState(object stateDto)
@@ -65,7 +64,7 @@ public sealed class InventorySaveParticipant : ISaveParticipant
         _inventory.MaxWeight = float.MaxValue;
         foreach (var itemDto in dto.Items ?? new List<ItemInstanceDto>())
         {
-            ItemInstance item = FromDto(itemDto);
+            ItemInstance item = ItemInstanceDtoMapper.FromDto(itemDto);
             RegisterDefinitionOrPlaceholder(item);
             if (!_inventory.AddItem(item))
             {
@@ -76,7 +75,7 @@ public sealed class InventorySaveParticipant : ISaveParticipant
 
         WeaponInstance? equipped = dto.EquippedWeapon == null
             ? null
-            : FromDto(dto.EquippedWeapon) as WeaponInstance;
+            : ItemInstanceDtoMapper.FromDto(dto.EquippedWeapon) as WeaponInstance;
         if (equipped != null)
         {
             RegisterDefinitionOrPlaceholder(equipped);
@@ -97,57 +96,4 @@ public sealed class InventorySaveParticipant : ISaveParticipant
         _inventory.RegisterDefinition(definition);
     }
 
-    private static ItemInstanceDto ToDto(ItemInstance item)
-    {
-        var payload = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-        foreach (var (key, value) in item.Payload)
-        {
-            payload[key] = Convert.ToString(value, CultureInfo.InvariantCulture) ?? string.Empty;
-        }
-
-        if (item is WeaponInstance weapon)
-        {
-            return new ItemInstanceDto(
-                item.DefinitionId,
-                item.StackCount,
-                payload,
-                weapon.WeaponDefinitionId,
-                weapon.UpgradeLevel,
-                weapon.CurrentAmmo,
-                new List<string>(weapon.InstalledModIds));
-        }
-
-        return new ItemInstanceDto(
-            item.DefinitionId,
-            item.StackCount,
-            payload,
-            null,
-            0,
-            0,
-            new List<string>());
-    }
-
-    private static ItemInstance FromDto(ItemInstanceDto dto)
-    {
-        ItemInstance item = string.IsNullOrEmpty(dto.WeaponDefinitionId)
-            ? new ItemInstance(dto.DefinitionId, dto.StackCount)
-            : new WeaponInstance(dto.DefinitionId, dto.WeaponDefinitionId, dto.StackCount)
-            {
-                UpgradeLevel = dto.UpgradeLevel,
-                CurrentAmmo = dto.CurrentAmmo,
-            };
-
-        if (item is WeaponInstance weapon && dto.InstalledModIds != null)
-        {
-            weapon.InstalledModIds.AddRange(dto.InstalledModIds);
-        }
-        if (dto.Payload != null)
-        {
-            foreach (var (key, value) in dto.Payload)
-            {
-                item.Payload[key] = value;
-            }
-        }
-        return item;
-    }
 }

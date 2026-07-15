@@ -1,0 +1,60 @@
+[gd_resource type="Resource" script_class="QuestDefinition" load_steps=17 format=3]
+
+[ext_resource type="Script" path="res://src/Meridian/Data/QuestDefinition.cs" id="1_quest"]
+[ext_resource type="Script" path="res://src/Meridian/Data/QuestObjectiveResource.cs" id="2_objective"]
+[ext_resource type="Script" path="res://src/Meridian/Data/QuestRewardResource.cs" id="3_reward"]
+[ext_resource type="Script" path="res://src/Meridian/Data/Conditions/PlayerInRegionConditionResource.cs" id="4_region"]
+[ext_resource type="Script" path="res://src/Meridian/Data/Actions/SetWorldFlagActionResource.cs" id="5_flag"]
+[ext_resource type="Script" path="res://src/Meridian/Data/Actions/ShowNotificationActionResource.cs" id="6_notice"]
+[ext_resource type="Script" path="res://src/Meridian/Data/Actions/GrantXpActionResource.cs" id="7_xp"]
+[ext_resource type="Script" path="res://src/Meridian/Data/Actions/ModifyFactionReputationActionResource.cs" id="8_rep"]
+
+[sub_resource type="Resource" id="Objective_scrap"]
+script = ExtResource("2_objective")
+ObjectiveId = "collect_scrap"
+Type = 0
+Target = "metal_scrap"
+RequiredCount = 3
+
+[sub_resource type="Resource" id="Reward_ammo"]
+script = ExtResource("3_reward")
+ItemId = "ammo_9mm"
+Count = 12
+
+[sub_resource type="Resource" id="Condition_region"]
+script = ExtResource("4_region")
+RegionId = "harbor_town"
+
+[sub_resource type="Resource" id="Accept_flag"]
+script = ExtResource("5_flag")
+FlagId = "harbor_relay_accepted"
+Value = true
+
+[sub_resource type="Resource" id="Accept_notice"]
+script = ExtResource("6_notice")
+Message = "Quest started: Harbor Relay"
+
+[sub_resource type="Resource" id="Complete_xp"]
+script = ExtResource("7_xp")
+Amount = 75
+
+[sub_resource type="Resource" id="Complete_rep"]
+script = ExtResource("8_rep")
+FactionId = "harbor_union"
+Amount = 10
+
+[sub_resource type="Resource" id="Complete_flag"]
+script = ExtResource("5_flag")
+FlagId = "harbor_relay_complete"
+Value = true
+
+[resource]
+script = ExtResource("1_quest")
+QuestId = "harbor_relay"
+DisplayName = "Harbor Relay"
+Description = "Collect replacement scrap for the harbor relay station."
+Objectives = Array[Resource]([SubResource("Objective_scrap")])
+Rewards = Array[Resource]([SubResource("Reward_ammo")])
+StartConditions = Array[Resource]([SubResource("Condition_region")])
+OnAcceptActions = Array[Resource]([SubResource("Accept_flag"), SubResource("Accept_notice")])
+OnCompleteActions = Array[Resource]([SubResource("Complete_xp"), SubResource("Complete_rep"), SubResource("Complete_flag")])

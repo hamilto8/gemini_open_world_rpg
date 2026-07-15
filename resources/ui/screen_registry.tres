@@ -1,0 +1,71 @@
+[gd_resource type="Resource" load_steps=22 format=3]
+
+[ext_resource type="Script" path="res://src/Meridian/UI/UIScreenRegistry.cs" id="1_registry"]
+[ext_resource type="Script" path="res://src/Meridian/UI/UIScreenDefinition.cs" id="2_definition"]
+[ext_resource type="PackedScene" path="res://scenes/ui/screens/MainMenu.tscn" id="3_main"]
+[ext_resource type="PackedScene" path="res://scenes/ui/screens/Pause.tscn" id="4_pause"]
+[ext_resource type="PackedScene" path="res://scenes/ui/screens/Loading.tscn" id="5_loading"]
+[ext_resource type="PackedScene" path="res://scenes/ui/screens/Settings.tscn" id="6_settings"]
+[ext_resource type="PackedScene" path="res://scenes/ui/screens/Controls.tscn" id="7_controls"]
+[ext_resource type="PackedScene" path="res://scenes/ui/screens/Inventory.tscn" id="8_inventory"]
+[ext_resource type="PackedScene" path="res://scenes/ui/screens/Equipment.tscn" id="9_equipment"]
+[ext_resource type="PackedScene" path="res://scenes/ui/screens/Journal.tscn" id="10_journal"]
+[ext_resource type="PackedScene" path="res://scenes/ui/screens/Map.tscn" id="11_map"]
+[ext_resource type="PackedScene" path="res://scenes/ui/screens/Dialogue.tscn" id="12_dialogue"]
+
+[sub_resource type="Resource" id="Main"]
+script = ExtResource("2_definition")
+Id = 0
+Scene = ExtResource("3_main")
+PausesGame = true
+CanGoBack = false
+
+[sub_resource type="Resource" id="Pause"]
+script = ExtResource("2_definition")
+Id = 1
+Scene = ExtResource("4_pause")
+
+[sub_resource type="Resource" id="Loading"]
+script = ExtResource("2_definition")
+Id = 2
+Scene = ExtResource("5_loading")
+CanGoBack = false
+
+[sub_resource type="Resource" id="Settings"]
+script = ExtResource("2_definition")
+Id = 3
+Scene = ExtResource("6_settings")
+
+[sub_resource type="Resource" id="Controls"]
+script = ExtResource("2_definition")
+Id = 4
+Scene = ExtResource("7_controls")
+
+[sub_resource type="Resource" id="Inventory"]
+script = ExtResource("2_definition")
+Id = 5
+Scene = ExtResource("8_inventory")
+
+[sub_resource type="Resource" id="Equipment"]
+script = ExtResource("2_definition")
+Id = 6
+Scene = ExtResource("9_equipment")
+
+[sub_resource type="Resource" id="Journal"]
+script = ExtResource("2_definition")
+Id = 7
+Scene = ExtResource("10_journal")
+
+[sub_resource type="Resource" id="Map"]
+script = ExtResource("2_definition")
+Id = 8
+Scene = ExtResource("11_map")
+
+[sub_resource type="Resource" id="Dialogue"]
+script = ExtResource("2_definition")
+Id = 9
+Scene = ExtResource("12_dialogue")
+
+[resource]
+script = ExtResource("1_registry")
+Screens = Array[ExtResource("2_definition")]([SubResource("Main"), SubResource("Pause"), SubResource("Loading"), SubResource("Settings"), SubResource("Controls"), SubResource("Inventory"), SubResource("Equipment"), SubResource("Journal"), SubResource("Map"), SubResource("Dialogue")])

@@ -1,5 +1,7 @@
 using Godot;
 using Meridian.Core;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace Meridian.Core.Save;
 
@@ -32,6 +34,14 @@ public partial class SaveServiceNode : Node, ISaveService
     public void SaveGame(string slotName, string locationName = "Unknown Location")
     {
         _service?.SaveGame(slotName, locationName);
+    }
+
+    public Task SaveGameAsync(
+        string slotName,
+        string locationName = "Unknown Location",
+        CancellationToken cancellationToken = default)
+    {
+        return _service?.SaveGameAsync(slotName, locationName, cancellationToken) ?? Task.CompletedTask;
     }
 
     public bool LoadGame(string slotName)

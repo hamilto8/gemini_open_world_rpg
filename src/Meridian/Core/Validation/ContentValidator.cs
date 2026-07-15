@@ -87,6 +87,22 @@ public partial class ContentValidator : IContentValidator
         CheckIdNaming("WeatherProfiles", db.WeatherProfiles, errors);
         CheckIdNaming("MovementProfiles", db.MovementProfiles, errors);
         CheckIdNaming("HandlingProfiles", db.HandlingProfiles, errors);
+        CheckIdNaming("Quests", db.Quests, errors);
+        CheckIdNaming("Dialogues", db.Dialogues, errors);
+        CheckIdNaming("Npcs", db.Npcs, errors);
+        CheckIdNaming("ScheduledEvents", db.ScheduledEvents, errors);
+        CheckIdNaming("Factions", db.Factions, errors);
+        CheckIdNaming("FastTravelPoints", db.FastTravelPoints, errors);
+        CheckIdNaming("ProgressionProfiles", db.ProgressionProfiles, errors);
+        CheckIdNaming("SoundCues", db.SoundCues, errors);
+
+        foreach (var entry in db.SoundCues.Entries)
+        {
+            if (string.IsNullOrWhiteSpace(entry.Value.StreamPath))
+            {
+                errors.Add($"Sound-cue schema error: cue '{entry.Key}' has no audio stream.");
+            }
+        }
 
         // (c) Cross-references resolve.
         // weapon -> ammo item id must exist in Items (ammo occupies inventory as an item, §6.5).
@@ -108,6 +124,116 @@ public partial class ContentValidator : IContentValidator
                 {
                     errors.Add($"Cross-reference error: loot table '{entry.Key}' references item '{itemId}', which is not in the Items registry.");
                 }
+            }
+        }
+
+        foreach (var entry in db.WeatherProfiles.Entries)
+        {
+            foreach (string targetId in entry.Value.TransitionWeatherIds)
+            {
+                if (!db.WeatherProfiles.Contains(targetId))
+                {
+                    errors.Add($"Cross-reference error: weather '{entry.Key}' transitions to unknown weather '{targetId}'.");
+                }
+            }
+        }
+
+        ValidateNarrativeReferences(db, errors);
+    }
+
+    private static void ValidateNarrativeReferences(IContentDatabase db, List<string> errors)
+    {
+        foreach (var entry in db.Quests.Entries)
+        {
+            var objectiveIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var objective in entry.Value.Objectives)
+            {
+                if (string.IsNullOrEmpty(objective.ObjectiveId) || !objectiveIds.Add(objective.ObjectiveId))
+                {
+                    errors.Add($"Quest schema error: quest '{entry.Key}' contains an empty or duplicate objective id '{objective.ObjectiveId}'.");
+                }
+                if (objective.RequiredCount <= 0 || string.IsNullOrEmpty(objective.Target))
+                {
+                    errors.Add($"Quest schema error: quest '{entry.Key}' objective '{objective.ObjectiveId}' needs a target and positive count.");
+                }
+            }
+
+            foreach (var reward in entry.Value.Rewards)
+            {
+                if (reward.Count <= 0 || string.IsNullOrEmpty(reward.ItemId) || !db.Items.Contains(reward.ItemId))
+                {
+                    errors.Add($"Cross-reference error: quest '{entry.Key}' has invalid reward item '{reward.ItemId}'/count {reward.Count}.");
+                }
+            }
+        }
+
+        foreach (var entry in db.Dialogues.Entries)
+        {
+            var nodeIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var node in entry.Value.Nodes)
+            {
+                if (string.IsNullOrEmpty(node.NodeId) || !nodeIds.Add(node.NodeId))
+                {
+                    errors.Add($"Dialogue schema error: dialogue '{entry.Key}' contains an empty or duplicate node id '{node.NodeId}'.");
+                }
+            }
+            if (!nodeIds.Contains(entry.Value.StartNodeId))
+            {
+                errors.Add($"Dialogue schema error: dialogue '{entry.Key}' start node '{entry.Value.StartNodeId}' does not exist.");
+            }
+            foreach (var node in entry.Value.Nodes)
+            {
+                foreach (var choice in node.Choices)
+                {
+                    if (string.IsNullOrWhiteSpace(choice.Text)
+                        || (!choice.TargetNodeId.Equals("end", StringComparison.OrdinalIgnoreCase)
+                            && !nodeIds.Contains(choice.TargetNodeId)))
+                    {
+                        errors.Add($"Dialogue schema error: dialogue '{entry.Key}' node '{node.NodeId}' has an invalid choice target '{choice.TargetNodeId}'.");
+                    }
+                }
+            }
+        }
+
+        foreach (var entry in db.Npcs.Entries)
+        {
+            if (!string.IsNullOrEmpty(entry.Value.DialogueId) && !db.Dialogues.Contains(entry.Value.DialogueId))
+            {
+                errors.Add($"Cross-reference error: NPC '{entry.Key}' references dialogue '{entry.Value.DialogueId}', which is not registered.");
+            }
+            if (!string.IsNullOrEmpty(entry.Value.FactionId) && !db.Factions.Contains(entry.Value.FactionId))
+            {
+                errors.Add($"Cross-reference error: NPC '{entry.Key}' references faction '{entry.Value.FactionId}', which is not registered.");
+            }
+            if (entry.Value.Schedule.Count == 0)
+            {
+                errors.Add($"NPC schema error: NPC '{entry.Key}' has no schedule entries.");
+            }
+        }
+
+        foreach (var entry in db.ScheduledEvents.Entries)
+        {
+            if (entry.Value.Hour is < 0 or > 23 || entry.Value.Minute is < 0 or > 59 || entry.Value.Actions.Count == 0)
+            {
+                errors.Add($"Scheduled-event schema error: event '{entry.Key}' needs a valid time and at least one action.");
+            }
+        }
+
+        foreach (var entry in db.Factions.Entries)
+        {
+            if (entry.Value.MinimumReputation > entry.Value.MaximumReputation
+                || entry.Value.StartingReputation < entry.Value.MinimumReputation
+                || entry.Value.StartingReputation > entry.Value.MaximumReputation)
+            {
+                errors.Add($"Faction schema error: faction '{entry.Key}' has an invalid reputation range/default.");
+            }
+        }
+
+        foreach (var entry in db.ProgressionProfiles.Entries)
+        {
+            if (entry.Value.BaseXpRequired <= 0 || entry.Value.XpExponent <= 0 || entry.Value.MaxLevel < 1)
+            {
+                errors.Add($"Progression schema error: profile '{entry.Key}' has invalid curve values.");
             }
         }
     }

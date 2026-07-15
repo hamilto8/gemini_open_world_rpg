@@ -1,0 +1,48 @@
+[gd_scene load_steps=10 format=3]
+
+[ext_resource type="Script" path="res://src/Meridian/UI/UIShell.cs" id="1_shell"]
+[ext_resource type="Theme" path="res://resources/ui/meridian_theme.tres" id="2_theme"]
+[ext_resource type="Resource" path="res://resources/ui/screen_registry.tres" id="3_registry"]
+[ext_resource type="Translation" path="res://resources/ui/en.tres" id="4_translation"]
+[ext_resource type="Script" path="res://src/Meridian/UI/UserInterfaceSettingsServiceNode.cs" id="5_settings"]
+[ext_resource type="Script" path="res://src/Meridian/UI/ControllerGlyphService.cs" id="6_glyphs"]
+[ext_resource type="Script" path="res://src/Meridian/UI/SafeAreaContainer.cs" id="7_safe"]
+[ext_resource type="PackedScene" path="res://scenes/ui/MinimalHud.tscn" id="8_hud"]
+[ext_resource type="PackedScene" path="res://scenes/ui/FeedbackLayer.tscn" id="9_feedback"]
+
+[node name="UIShell" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+theme = ExtResource("2_theme")
+script = ExtResource("1_shell")
+Registry = ExtResource("3_registry")
+Translations = Array[Translation]([ExtResource("4_translation")])
+
+[node name="SettingsService" type="Node" parent="."]
+script = ExtResource("5_settings")
+
+[node name="GlyphService" type="Node" parent="."]
+script = ExtResource("6_glyphs")
+
+[node name="Hud" parent="." instance=ExtResource("8_hud")]
+
+[node name="SafeArea" type="MarginContainer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 1
+script = ExtResource("7_safe")
+
+[node name="ScreenHost" type="Control" parent="SafeArea"]
+layout_mode = 2
+mouse_filter = 1
+
+[node name="Feedback" parent="." instance=ExtResource("9_feedback")]

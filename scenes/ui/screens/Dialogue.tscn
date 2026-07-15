@@ -1,0 +1,42 @@
+[gd_scene load_steps=2 format=3]
+[ext_resource type="Script" path="res://src/Meridian/UI/DialogueScreen.cs" id="1"]
+[node name="Dialogue" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 1
+script = ExtResource("1")
+[node name="Bottom" type="MarginContainer" parent="."]
+layout_mode = 1
+anchors_preset = 12
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 36.0
+offset_top = -330.0
+offset_right = -36.0
+offset_bottom = -36.0
+grow_horizontal = 2
+grow_vertical = 0
+[node name="Panel" type="PanelContainer" parent="Bottom"]
+layout_mode = 2
+[node name="Margin" type="MarginContainer" parent="Bottom/Panel"]
+layout_mode = 2
+theme_override_constants/margin_left = 28
+theme_override_constants/margin_top = 22
+theme_override_constants/margin_right = 28
+theme_override_constants/margin_bottom = 22
+[node name="Rows" type="VBoxContainer" parent="Bottom/Panel/Margin"]
+layout_mode = 2
+[node name="Speaker" type="Label" parent="Bottom/Panel/Margin/Rows"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 22
+text = "Speaker"
+[node name="Line" type="Label" parent="Bottom/Panel/Margin/Rows"]
+layout_mode = 2
+text = "Dialogue adapters place localized speaker text here. Subtitle settings are consumed by the presenter."
+autowrap_mode = 2
+[node name="Choices" type="VBoxContainer" parent="Bottom/Panel/Margin/Rows"]
+layout_mode = 2

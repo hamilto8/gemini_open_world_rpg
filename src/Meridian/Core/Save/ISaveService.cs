@@ -1,4 +1,6 @@
 using System;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace Meridian.Core.Save;
 
@@ -26,6 +28,12 @@ public interface ISaveParticipant
     Type StateType { get; }
 
     /// <summary>
+    /// Version of this participant's DTO. This is independent from the root save-container version,
+    /// allowing one gameplay module to evolve without forcing unrelated modules to migrate.
+    /// </summary>
+    int StateVersion => 1;
+
+    /// <summary>
     /// Captures the current mutable runtime state into a serializable DTO (no Godot Node/Resource references).
     /// Called synchronously on the main thread during save initiation.
     /// </summary>
@@ -35,6 +43,50 @@ public interface ISaveParticipant
     /// Restores runtime state from the provided DTO.
     /// </summary>
     void RestoreState(object stateDto);
+}
+
+/// <summary>
+/// Optional participant contract for migrating older module payloads before typed deserialization.
+/// Implementations must accept every version from their oldest supported save through
+/// <see cref="ISaveParticipant.StateVersion"/> and return JSON in the current schema.
+/// </summary>
+public interface ISaveStateMigrator
+{
+    string MigrateStateJson(int sourceVersion, string stateJson);
+}
+
+/// <summary>Policy for participant payloads whose owning feature is unavailable in this build.</summary>
+public enum UnknownSaveContentPolicy
+{
+    /// <summary>Keep the opaque JSON and write it back unchanged on the next save.</summary>
+    PreserveAndWarn,
+
+    /// <summary>Reject the load rather than risk silently dropping required state.</summary>
+    RejectLoad,
+}
+
+/// <summary>Canonical restore bands. Features may choose values within a band for finer ordering.</summary>
+public static class SaveRestoreOrder
+{
+    public const int GlobalFlags = 10;
+    public const int Environment = 20;
+    public const int RegionWarmup = 30;
+    public const int WorldObjects = 40;
+    public const int Narrative = 50;
+    public const int Progression = 60;
+    public const int Inventory = 70;
+    public const int Equipment = 80;
+    public const int PlayerTransform = 90;
+    public const int Possession = 100;
+    public const int Settings = 200;
+}
+
+/// <summary>A root save migration from exactly one container version to the next.</summary>
+public interface ISaveMigration
+{
+    int SourceVersion { get; }
+    int TargetVersion { get; }
+    GameSaveData Migrate(GameSaveData source);
 }
 
 /// <summary>
@@ -50,6 +102,15 @@ public interface ISaveService
     /// Captures state from all registered participants and writes atomically to the designated slot.
     /// </summary>
     void SaveGame(string slotName, string locationName = "Unknown Location");
+
+    /// <summary>
+    /// Captures participants on the calling thread, then serializes, flushes, and atomically replaces
+    /// the slot in the background. Godot callers should prefer this API to avoid blocking a frame.
+    /// </summary>
+    Task SaveGameAsync(
+        string slotName,
+        string locationName = "Unknown Location",
+        CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Loads a save file from the designated slot and restores state across all registered participants in RestoreOrder.

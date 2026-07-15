@@ -97,31 +97,6 @@ public partial class IsInVehicleConditionResource : ConditionResource
     public override ICondition ToCondition() => new IsInVehicleCondition();
 }
 
-/// <summary>Wrapper for <see cref="QuestStateCondition"/> (state compared by name, e.g. "Active").</summary>
-[GlobalClass]
-public partial class QuestStateConditionResource : ConditionResource
-{
-    /// <summary>Quest id to test.</summary>
-    [Export] public string QuestId { get; set; } = "";
-
-    /// <summary>Required quest state name (e.g. "NotStarted", "Active", "Completed", "Failed").</summary>
-    [Export] public string State { get; set; } = "Active";
-
-    /// <inheritdoc />
-    public override ICondition ToCondition() => new QuestStateCondition(QuestId, State);
-}
-
-/// <summary>Wrapper for <see cref="PlayerInRegionCondition"/>.</summary>
-[GlobalClass]
-public partial class PlayerInRegionConditionResource : ConditionResource
-{
-    /// <summary>Region id the player must be in.</summary>
-    [Export] public string RegionId { get; set; } = "";
-
-    /// <inheritdoc />
-    public override ICondition ToCondition() => new PlayerInRegionCondition(RegionId);
-}
-
 /// <summary>Wrapper for <see cref="AllOfCondition"/>. Null children are skipped; an empty set passes.</summary>
 [GlobalClass]
 public partial class AllOfConditionResource : ConditionResource

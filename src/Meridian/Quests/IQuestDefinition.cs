@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using Meridian.Core.Logic;
 
 namespace Meridian.Quests;
 
@@ -23,4 +24,13 @@ public interface IQuestDefinition
 
     /// <summary>Items granted when every objective is complete.</summary>
     IReadOnlyList<QuestReward> Rewards { get; }
+
+    /// <summary>Conditions that must all pass before the quest can be accepted.</summary>
+    IReadOnlyList<ICondition> StartConditions => System.Array.Empty<ICondition>();
+
+    /// <summary>Effects executed after the quest enters the active state.</summary>
+    IReadOnlyList<IGameAction> OnAcceptActions => System.Array.Empty<IGameAction>();
+
+    /// <summary>Effects executed after rewards are granted on completion.</summary>
+    IReadOnlyList<IGameAction> OnCompleteActions => System.Array.Empty<IGameAction>();
 }

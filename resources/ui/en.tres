@@ -1,0 +1,23 @@
+[gd_resource type="Translation" format=3]
+
+[resource]
+locale = "en"
+messages = {
+"ui.back": "Back",
+"ui.controls.binding_saved": "Binding saved.",
+"ui.controls.cancel_hint": "Press Escape to cancel.",
+"ui.controls.cancelled": "Binding unchanged.",
+"ui.controls.conflict": "Already assigned to {0}. Choose Replace to continue.",
+"ui.controls.conflict_replaced": "Conflicting binding replaced.",
+"ui.controls.press_key": "Press a key…",
+"ui.dialogue.continue": "Continue",
+"interaction.talk": "Talk",
+"ui.equipment.empty": "No equipment selected. Content adapters populate this panel.",
+"ui.inventory.empty": "Your inventory is empty. Item view-model adapters populate this list.",
+"ui.journal.empty": "No tracked quests. Quest view-model adapters populate this journal.",
+"ui.map.empty": "Map rendering hook — region and discovery overlays mount here.",
+"ui.settings.defaults_restored": "Defaults restored.",
+"ui.settings.saved": "Settings saved.",
+"ui.settings.title": "Settings",
+"ui.title": "PROJECT MERIDIAN"
+}

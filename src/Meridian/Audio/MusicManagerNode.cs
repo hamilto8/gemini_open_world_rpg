@@ -11,7 +11,13 @@ namespace Meridian.Audio;
 /// </summary>
 public partial class MusicManagerNode : Node, IMusicManager
 {
+    [Export] public AudioStream? ExplorationStream { get; set; }
+    [Export] public AudioStream? CombatStream { get; set; }
+    [Export] public string MusicBus { get; set; } = "Music";
+
     private readonly MusicManager _manager = new();
+    private AudioStreamPlayer? _explorationPlayer;
+    private AudioStreamPlayer? _combatPlayer;
 
     public float Tension => _manager.Tension;
     public float ExplorationVolumeDb => _manager.ExplorationVolumeDb;
@@ -20,6 +26,14 @@ public partial class MusicManagerNode : Node, IMusicManager
     public override void _EnterTree()
     {
         Services.Register<IMusicManager>(this);
+    }
+
+    public override void _Ready()
+    {
+        string bus = AudioServer.GetBusIndex(MusicBus) >= 0 ? MusicBus : "Master";
+        _explorationPlayer = CreateStem("ExplorationStem", ExplorationStream, bus);
+        _combatPlayer = CreateStem("CombatStem", CombatStream, bus);
+        ApplyMix();
     }
 
     public override void _ExitTree()
@@ -34,11 +48,21 @@ public partial class MusicManagerNode : Node, IMusicManager
     {
         _manager.SetTension(targetTension);
 
-        // TODO(audio): stub — the crossfade volumes are computed but not yet applied to real buses.
-        // Wire up once the ExplorationBus/CombatBus audio buses exist (L9):
-        // AudioServer.SetBusVolumeDb(AudioServer.GetBusIndex("ExplorationBus"), ExplorationVolumeDb);
-        // AudioServer.SetBusVolumeDb(AudioServer.GetBusIndex("CombatBus"), CombatVolumeDb);
+        ApplyMix();
+    }
 
-        GD.Print($"[MusicManager] Tension updated to {Tension:P0}. Exploration: {ExplorationVolumeDb:F1}dB, Combat: {CombatVolumeDb:F1}dB");
+    private AudioStreamPlayer? CreateStem(string name, AudioStream? stream, string bus)
+    {
+        if (stream == null) return null;
+        var player = new AudioStreamPlayer { Name = name, Stream = stream, Bus = bus };
+        AddChild(player);
+        player.Play();
+        return player;
+    }
+
+    private void ApplyMix()
+    {
+        if (_explorationPlayer != null) _explorationPlayer.VolumeDb = ExplorationVolumeDb;
+        if (_combatPlayer != null) _combatPlayer.VolumeDb = CombatVolumeDb;
     }
 }

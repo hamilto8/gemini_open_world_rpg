@@ -27,6 +27,10 @@
     <ProjectReference Include="..\..\Meridian.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <None Include="Fixtures\Saves\**\*" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
   <!-- Expose GodotProjectDir to the transitively-referenced Godot source generators. -->
   <ItemGroup>
     <CompilerVisibleProperty Include="GodotProjectDir" />

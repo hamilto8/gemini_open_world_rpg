@@ -35,4 +35,7 @@ public interface IActionContext
 
     /// <summary>Spawns a scene at the given world position. Returns false if it could not be spawned.</summary>
     bool SpawnScene(string scenePath, float x, float y, float z);
+
+    /// <summary>Adjusts faction reputation. Returns false when the faction is unknown.</summary>
+    bool ModifyFactionReputation(string factionId, int amount) => false;
 }

@@ -41,4 +41,7 @@ public interface IConditionContext
     /// from the <c>Meridian.Quests.QuestState</c> enum.
     /// </summary>
     string? GetQuestState(string questId);
+
+    /// <summary>Returns the current reputation value for a faction; unknown ids read as zero.</summary>
+    int GetFactionReputation(string factionId) => 0;
 }

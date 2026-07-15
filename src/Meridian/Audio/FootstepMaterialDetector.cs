@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using Godot;
+using Meridian.Core;
 
 namespace Meridian.Audio;
 
@@ -47,9 +48,7 @@ public partial class FootstepMaterialDetectorNode : RayCast3D
         }
     }
 
-    // TODO(audio): stub — not yet called by the locomotion system, and material detection hardcodes
-    // the "metal"/"dirt" group names. Wire this to the animation/step events and play through the
-    // AudioDirector once footstep cues are authored (L9).
+    /// <summary>Animation/locomotion event hook. Surface profiles resolve into pooled AudioDirector cues.</summary>
     public void PlayFootstep()
     {
         if (!IsColliding()) return;
@@ -59,7 +58,11 @@ public partial class FootstepMaterialDetectorNode : RayCast3D
         {
             // Simple material tag check: look up group or custom property
             string material = "grass"; // Default fallback
-            if (colNode.IsInGroup("metal"))
+            if (colNode.HasMeta("footstep_material"))
+            {
+                material = colNode.GetMeta("footstep_material").AsString();
+            }
+            else if (colNode.IsInGroup("metal"))
             {
                 material = "metal";
             }
@@ -71,10 +74,10 @@ public partial class FootstepMaterialDetectorNode : RayCast3D
             string sfxPath = _detector.GetFootstepSfx(material);
             if (!string.IsNullOrEmpty(sfxPath))
             {
-                GD.Print($"[FootstepDetector] Playing footstep SFX '{sfxPath}' for material '{material}'");
-
-                // Under Godot, we play the audio stream:
-                // AudioDirector.PlaySfx(sfxPath, GlobalPosition);
+                if (Services.TryGet<IAudioDirector>(out var audioDirector) && audioDirector != null)
+                {
+                    audioDirector.PlaySoundCue(sfxPath);
+                }
             }
         }
     }

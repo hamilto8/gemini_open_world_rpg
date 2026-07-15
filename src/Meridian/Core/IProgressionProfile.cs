@@ -6,6 +6,9 @@ namespace Meridian.Core;
 /// </summary>
 public interface IProgressionProfile
 {
+    /// <summary>Stable content id used by the progression profile registry.</summary>
+    string Id => "";
+
     int BaseXpRequired { get; }
     float XpExponent { get; }
     int MaxLevel { get; }

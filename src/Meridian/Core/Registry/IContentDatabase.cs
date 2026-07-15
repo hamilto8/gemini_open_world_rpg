@@ -2,6 +2,13 @@ using System.Collections.Generic;
 using Meridian.Combat;
 using Meridian.Data;
 using Meridian.Items;
+using Meridian.Quests;
+using Meridian.Dialogue;
+using Meridian.NPC;
+using Meridian.Environment;
+using Meridian.Factions;
+using Meridian.World;
+using Meridian.Audio;
 
 namespace Meridian.Core.Registry;
 
@@ -32,6 +39,15 @@ public interface IContentDatabase
 
     /// <summary>Vehicle handling profiles (§11.1).</summary>
     IRegistry<IVehicleHandlingProfile> HandlingProfiles { get; }
+
+    IRegistry<IQuestDefinition> Quests { get; }
+    IRegistry<IDialogueDefinition> Dialogues { get; }
+    IRegistry<INpcDefinition> Npcs { get; }
+    IRegistry<IScheduledEventDefinition> ScheduledEvents { get; }
+    IRegistry<IFactionDefinition> Factions { get; }
+    IRegistry<IFastTravelPointDefinition> FastTravelPoints { get; }
+    IRegistry<IProgressionProfile> ProgressionProfiles { get; }
+    IRegistry<ISoundCueDefinition> SoundCues { get; }
 
     /// <summary>Load-time problems collected across all categories (duplicate/empty ids, null entries).</summary>
     IReadOnlyList<string> Diagnostics { get; }

@@ -69,6 +69,24 @@ public sealed class WeatherIsCondition : ICondition
     }
 }
 
+/// <summary>Passes when faction reputation reaches the authored threshold.</summary>
+public sealed class FactionReputationCondition : ICondition
+{
+    private readonly string? _factionId;
+    private readonly int _minimum;
+
+    public FactionReputationCondition(string factionId, int minimum)
+    {
+        _factionId = factionId;
+        _minimum = minimum;
+    }
+
+    public bool Evaluate(IConditionContext context) =>
+        context is not null
+        && !string.IsNullOrEmpty(_factionId)
+        && context.GetFactionReputation(_factionId) >= _minimum;
+}
+
 /// <summary>
 /// Passes when a stat is at or above <c>minimum</c>. Uses the deterministic-threshold policy
 /// recommended in §8.4 (legible, Witcher-style) rather than a random roll.

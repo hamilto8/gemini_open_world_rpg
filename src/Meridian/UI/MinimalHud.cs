@@ -205,6 +205,11 @@ public partial class MinimalHud : Control
 
     private static string InteractGlyph()
     {
+        if (Services.TryGet<IInputGlyphService>(out var glyphs) && glyphs != null)
+        {
+            return $"[{glyphs.GetActionGlyph("interact")}]";
+        }
+
         // interact is bound to E (keyboard) and the X button (gamepad) — show whichever matches the
         // player's current device so the scheme swaps seamlessly.
         if (Services.TryGet<IInputDeviceTracker>(out var tracker) && tracker?.ActiveDevice == InputDeviceType.Gamepad)

@@ -1,0 +1,64 @@
+[gd_resource type="Resource" script_class="DialogueDefinition" load_steps=17 format=3]
+
+[ext_resource type="Script" path="res://src/Meridian/Data/DialogueDefinition.cs" id="1_dialogue"]
+[ext_resource type="Script" path="res://src/Meridian/Data/Conditions/QuestStateConditionResource.cs" id="2_quest_condition"]
+[ext_resource type="Script" path="res://src/Meridian/Data/Conditions/FactionReputationConditionResource.cs" id="3_rep_condition"]
+[ext_resource type="Script" path="res://src/Meridian/Data/Actions/StartQuestActionResource.cs" id="4_start_quest"]
+[ext_resource type="Script" path="res://src/Meridian/Data/Actions/ShowNotificationActionResource.cs" id="5_notice"]
+[ext_resource type="Script" path="res://src/Meridian/Data/DialogueNodeResource.cs" id="6_node"]
+[ext_resource type="Script" path="res://src/Meridian/Data/DialogueChoiceResource.cs" id="7_choice"]
+
+[sub_resource type="Resource" id="Condition_quest_not_started"]
+script = ExtResource("2_quest_condition")
+QuestId = "harbor_relay"
+State = "NotStarted"
+
+[sub_resource type="Resource" id="Condition_rep"]
+script = ExtResource("3_rep_condition")
+FactionId = "harbor_union"
+Minimum = 0
+
+[sub_resource type="Resource" id="Action_start_quest"]
+script = ExtResource("4_start_quest")
+QuestId = "harbor_relay"
+
+[sub_resource type="Resource" id="Action_notice"]
+script = ExtResource("5_notice")
+Message = "The dockmaster marked the relay on your journal."
+
+[sub_resource type="Resource" id="Choice_accept"]
+script = ExtResource("7_choice")
+Text = "I'll bring you the scrap."
+TargetNodeId = "accepted"
+Conditions = Array[Resource]([SubResource("Condition_quest_not_started"), SubResource("Condition_rep")])
+Actions = Array[Resource]([SubResource("Action_start_quest"), SubResource("Action_notice")])
+
+[sub_resource type="Resource" id="Choice_decline"]
+script = ExtResource("7_choice")
+Text = "Not right now."
+TargetNodeId = "end"
+
+[sub_resource type="Resource" id="Node_start"]
+script = ExtResource("6_node")
+NodeId = "start"
+Speaker = "Dockmaster Vale"
+Text = "Storms stripped the relay. Three pieces of scrap will get it talking again."
+Choices = Array[Resource]([SubResource("Choice_accept"), SubResource("Choice_decline")])
+
+[sub_resource type="Resource" id="Choice_end"]
+script = ExtResource("7_choice")
+Text = "I'll return when it's done."
+TargetNodeId = "end"
+
+[sub_resource type="Resource" id="Node_accepted"]
+script = ExtResource("6_node")
+NodeId = "accepted"
+Speaker = "Dockmaster Vale"
+Text = "Good. Check the abandoned supply crates along the quay."
+Choices = Array[Resource]([SubResource("Choice_end")])
+
+[resource]
+script = ExtResource("1_dialogue")
+Id = "dockmaster_intro"
+StartNodeId = "start"
+Nodes = Array[Resource]([SubResource("Node_start"), SubResource("Node_accepted")])

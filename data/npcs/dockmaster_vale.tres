@@ -1,0 +1,33 @@
+[gd_resource type="Resource" script_class="NpcDefinition" load_steps=7 format=3]
+
+[ext_resource type="Script" path="res://src/Meridian/Data/NpcDefinition.cs" id="1_script"]
+[ext_resource type="Script" path="res://src/Meridian/Data/NpcScheduleEntryResource.cs" id="2_schedule"]
+
+[sub_resource type="Resource" id="Schedule_sleep"]
+script = ExtResource("2_schedule")
+StartHour = 22
+EndHour = 6
+Activity = 0
+Position = Vector3(-18, 0, -8)
+
+[sub_resource type="Resource" id="Schedule_work"]
+script = ExtResource("2_schedule")
+StartHour = 7
+EndHour = 16
+Activity = 1
+Position = Vector3(4, 0, 10)
+
+[sub_resource type="Resource" id="Schedule_social"]
+script = ExtResource("2_schedule")
+StartHour = 17
+EndHour = 21
+Activity = 2
+Position = Vector3(-10, 0, 5)
+
+[resource]
+script = ExtResource("1_script")
+Id = "dockmaster_vale"
+DisplayName = "Dockmaster Vale"
+DialogueId = "dockmaster_intro"
+FactionId = "harbor_union"
+ScheduleEntries = Array[Resource]([SubResource("Schedule_sleep"), SubResource("Schedule_work"), SubResource("Schedule_social")])

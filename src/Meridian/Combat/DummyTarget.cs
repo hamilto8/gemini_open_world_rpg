@@ -52,32 +52,24 @@ public partial class DummyTarget : StaticBody3D, IDamageable, IHitZoneResolver
     {
         if (_stats == null) return;
 
-        float health = _stats.GetStat("health");
-        if (health <= 0f) return; // Already destroyed
+        DamageApplicationResult result = DamagePipeline.Apply(_stats.Stats, info);
+        if (!result.WasApplied) return;
 
-        // Ordered mitigation via the shared pure pipeline (Section 6.1).
-        float armor = _stats.GetStat("armor");
-        float mitigatedDamage = DamagePipeline.Mitigate(info.Amount, info.Zone, armor);
-
-        // Apply to Health
-        float newHealth = Math.Max(0f, health - mitigatedDamage);
-        _stats.SetBaseStat("health", newHealth);
-
-        GD.Print($"[DummyTarget] '{TargetName}' hit in {info.Zone} for {mitigatedDamage} damage (Armor: {armor}). Health: {newHealth}");
+        GD.Print($"[DummyTarget] '{TargetName}' hit in {info.Zone} for {result.AppliedDamage} damage. Health: {result.NewHealth}");
 
         // 4. Publish Event to EventBus
         if (Services.TryGet<IEventBus>(out var eventBus) && eventBus != null)
         {
             eventBus.Publish(new DamageDealtEvent(
                 TargetName: TargetName,
-                MitigatedAmount: mitigatedDamage,
+                MitigatedAmount: result.AppliedDamage,
                 IsCritical: info.Zone == HitZone.Head || info.Zone == HitZone.Weakpoint,
-                NewHealth: newHealth,
-                IsDead: newHealth <= 0f
+                NewHealth: result.NewHealth,
+                IsDead: result.IsDead
             ));
         }
 
-        if (newHealth <= 0f)
+        if (result.IsDead)
         {
             Die();
         }

@@ -21,13 +21,13 @@ public static class InputMapBootstrap
     public static void EnsureDefaultBindings()
     {
         // Movement: WASD + left stick (analog). Deadzone keeps the stick from drifting at rest.
-        AddKey("move_forward", Key.W);
+        AddKey("move_forward", InputActions.DefaultKeyboard["move_forward"]);
         AddJoyAxis("move_forward", JoyAxis.LeftY, -1.0f);
-        AddKey("move_backward", Key.S);
+        AddKey("move_backward", InputActions.DefaultKeyboard["move_backward"]);
         AddJoyAxis("move_backward", JoyAxis.LeftY, 1.0f);
-        AddKey("move_left", Key.A);
+        AddKey("move_left", InputActions.DefaultKeyboard["move_left"]);
         AddJoyAxis("move_left", JoyAxis.LeftX, -1.0f);
-        AddKey("move_right", Key.D);
+        AddKey("move_right", InputActions.DefaultKeyboard["move_right"]);
         AddJoyAxis("move_right", JoyAxis.LeftX, 1.0f);
         SetDeadzone("move_forward", StickDeadzone);
         SetDeadzone("move_backward", StickDeadzone);
@@ -46,17 +46,17 @@ public static class InputMapBootstrap
         SetDeadzone("look_down", StickDeadzone);
 
         // Buttons — Xbox layout.
-        AddKey("jump", Key.Space);
+        AddKey("jump", InputActions.DefaultKeyboard["jump"]);
         AddJoyButton("jump", JoyButton.A);
-        AddKey("sprint", Key.Shift);                    // run modifier on keyboard
+        AddKey("sprint", InputActions.DefaultKeyboard["sprint"]); // run modifier on keyboard
         AddJoyButton("sprint", JoyButton.RightStick);   // run = click right stick (R3) on the gamepad
-        AddKey("crouch", Key.Ctrl);
+        AddKey("crouch", InputActions.DefaultKeyboard["crouch"]);
         AddJoyButton("crouch", JoyButton.B);
-        AddKey("interact", Key.E);
+        AddKey("interact", InputActions.DefaultKeyboard["interact"]);
         AddJoyButton("interact", JoyButton.X);
-        AddKey("reload", Key.R);
+        AddKey("reload", InputActions.DefaultKeyboard["reload"]);
         AddJoyButton("reload", JoyButton.Y);
-        AddKey("brake", Key.Space);                     // vehicle handbrake; jump is blocked in the Vehicle context
+        AddKey("brake", InputActions.DefaultKeyboard["brake"]); // vehicle handbrake; jump is blocked in the Vehicle context
         AddJoyButton("brake", JoyButton.A);
         AddKey("menu_open", Key.Escape);
         AddJoyButton("menu_open", JoyButton.Start);

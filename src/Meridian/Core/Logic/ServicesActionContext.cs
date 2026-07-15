@@ -3,6 +3,7 @@ using Meridian.Audio;
 using Meridian.Core.Registry;
 using Meridian.Items;
 using Meridian.Quests;
+using Meridian.Factions;
 
 namespace Meridian.Core.Logic;
 
@@ -181,5 +182,18 @@ public sealed class ServicesActionContext : IActionContext
         }
 
         return _spawnScene(scenePath, x, y, z);
+    }
+
+    public bool ModifyFactionReputation(string factionId, int amount)
+    {
+        if (string.IsNullOrEmpty(factionId)
+            || !Services.TryGet<IFactionReputationService>(out var factions)
+            || factions is null)
+        {
+            _warn($"ModifyFactionReputation('{factionId}', {amount}) dropped: faction service unavailable.");
+            return false;
+        }
+
+        return factions.ModifyReputation(factionId, amount);
     }
 }

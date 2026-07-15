@@ -31,6 +31,14 @@ public partial class ContentDatabaseNode : Node
 
     /// <summary>Handling-profile index; a null slot means an empty HandlingProfiles category.</summary>
     [Export] public HandlingProfileIndex? Handling { get; set; }
+    [Export] public QuestIndex? Quests { get; set; }
+    [Export] public DialogueIndex? Dialogues { get; set; }
+    [Export] public NpcIndex? Npcs { get; set; }
+    [Export] public ScheduledEventIndex? ScheduledEvents { get; set; }
+    [Export] public FactionIndex? Factions { get; set; }
+    [Export] public FastTravelIndex? FastTravelPoints { get; set; }
+    [Export] public ProgressionProfileIndex? ProgressionProfiles { get; set; }
+    [Export] public SoundCueIndex? SoundCues { get; set; }
 
     private readonly ContentDatabase _database = new();
 
@@ -51,11 +59,35 @@ public partial class ContentDatabaseNode : Node
         _database.LoadWeatherProfiles(Weather?.Definitions);
         _database.LoadMovementProfiles(MovementProfiles?.Definitions);
         _database.LoadHandlingProfiles(Handling?.Definitions);
+        _database.LoadQuests(AdaptQuests());
+        _database.LoadDialogues(Dialogues?.Definitions);
+        _database.LoadNpcs(Npcs?.Definitions);
+        _database.LoadScheduledEvents(ScheduledEvents?.Definitions);
+        _database.LoadFactions(Factions?.Definitions);
+        _database.LoadFastTravelPoints(FastTravelPoints?.Definitions);
+        _database.LoadProgressionProfiles(ProgressionProfiles?.Definitions);
+        _database.LoadSoundCues(SoundCues?.Definitions);
 
         foreach (var diagnostic in _database.Diagnostics)
         {
             GD.PushWarning($"ContentDatabase: {diagnostic}");
         }
+    }
+
+    private System.Collections.Generic.IEnumerable<Meridian.Quests.IQuestDefinition?>? AdaptQuests()
+    {
+        if (Quests is null)
+        {
+            return null;
+        }
+
+        var definitions = new System.Collections.Generic.List<Meridian.Quests.IQuestDefinition?>();
+        foreach (var quest in Quests.Definitions)
+        {
+            definitions.Add(quest is null ? null : new Meridian.Quests.QuestDefinitionAdapter(quest));
+        }
+
+        return definitions;
     }
 
     /// <inheritdoc/>

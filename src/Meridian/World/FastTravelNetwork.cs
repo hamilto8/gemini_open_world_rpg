@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using Godot;
 using Meridian.Core;
+using Meridian.Core.Save;
 
 namespace Meridian.World;
 
@@ -26,16 +27,35 @@ public class FastTravelNode
 /// Decoupled from Godot for unit testing.
 /// Enforces Section 18.0 requirements.
 /// </summary>
-public class FastTravelNetwork
+public class FastTravelNetwork : ISaveParticipant
 {
     private readonly Dictionary<string, FastTravelNode> _nodes = new(StringComparer.OrdinalIgnoreCase);
+    private readonly HashSet<string> _pendingDiscoveries = new(StringComparer.OrdinalIgnoreCase);
 
     public IReadOnlyDictionary<string, FastTravelNode> Nodes => _nodes;
 
-    public void RegisterNode(string nodeId, string displayName, Vector3 position)
+    public string ParticipantId => "WorldDiscoveries";
+    public int RestoreOrder => SaveRestoreOrder.Narrative;
+    public Type StateType => typeof(DiscoveriesStateDto);
+
+    public void RegisterNode(string nodeId, string displayName, Vector3 position, bool discoveredByDefault = false)
     {
         ArgumentException.ThrowIfNullOrEmpty(nodeId);
-        _nodes[nodeId] = new FastTravelNode(nodeId, displayName, position);
+        _nodes[nodeId] = new FastTravelNode(nodeId, displayName, position, discoveredByDefault);
+        if (_pendingDiscoveries.Remove(nodeId))
+        {
+            _nodes[nodeId].IsDiscovered = true;
+        }
+    }
+
+    public void RegisterNode(IFastTravelPointDefinition definition)
+    {
+        ArgumentNullException.ThrowIfNull(definition);
+        RegisterNode(
+            definition.Id,
+            definition.DisplayName,
+            new Vector3(definition.X, definition.Y, definition.Z),
+            definition.DiscoveredByDefault);
     }
 
     public bool DiscoverNode(string nodeId)
@@ -81,6 +101,47 @@ public class FastTravelNetwork
         }
 
         return true;
+    }
+
+    public object CaptureState()
+    {
+        var discovered = new List<string>(_pendingDiscoveries);
+        foreach (var (id, node) in _nodes)
+        {
+            if (node.IsDiscovered)
+            {
+                discovered.Add(id);
+            }
+        }
+        discovered.Sort(StringComparer.OrdinalIgnoreCase);
+        return new DiscoveriesStateDto(discovered);
+    }
+
+    public void RestoreState(object stateDto)
+    {
+        if (stateDto is not DiscoveriesStateDto dto)
+        {
+            throw new ArgumentException("Expected discovery state.", nameof(stateDto));
+        }
+
+        foreach (var node in _nodes.Values)
+        {
+            node.IsDiscovered = false;
+        }
+        _pendingDiscoveries.Clear();
+        foreach (string id in dto.DiscoveredIds ?? new List<string>())
+        {
+            if (_nodes.TryGetValue(id, out var node))
+            {
+                node.IsDiscovered = true;
+            }
+            else if (!string.IsNullOrWhiteSpace(id))
+            {
+                // A discovery can belong to a region or DLC not registered yet. Retain it until the
+                // corresponding terminal is authored/streamed back in rather than losing progress.
+                _pendingDiscoveries.Add(id);
+            }
+        }
     }
 }
 

@@ -13,24 +13,69 @@ public static class InputRebindStore
     private const string ConfigPath = "user://input_bindings.cfg";
     private const string Section = "keyboard";
 
-    /// <summary>Replaces the keyboard event bound to <paramref name="action"/> with the given physical key.</summary>
-    public static void Rebind(string action, Key physicalKey)
+    /// <summary>
+    /// Replaces a keyboard binding. By default conflicts are rejected; callers can explicitly replace
+    /// the other action after presenting that consequence to the player.
+    /// </summary>
+    public static InputRebindResult Rebind(
+        string action,
+        Key physicalKey,
+        InputConflictResolution resolution = InputConflictResolution.Reject)
     {
-        if (!InputMap.HasAction(action))
+        if (!InputMap.HasAction(action) || physicalKey == Key.None)
         {
-            return;
+            return new InputRebindResult(false, null);
         }
 
-        // Erase existing keyboard events (keep gamepad/mouse), then add the new key.
-        foreach (var ev in new List<InputEvent>(InputMap.ActionGetEvents(action)))
+        string? conflict = FindConflict(action, physicalKey);
+        if (conflict != null && resolution == InputConflictResolution.Reject)
         {
-            if (ev is InputEventKey)
-            {
-                InputMap.ActionEraseEvent(action, ev);
-            }
+            return new InputRebindResult(false, conflict);
         }
+
+        if (conflict != null)
+        {
+            RemoveKeyboardBinding(conflict);
+        }
+
+        RemoveKeyboardBinding(action);
         InputMap.ActionAddEvent(action, new InputEventKey { PhysicalKeycode = physicalKey });
 
+        Save();
+        return new InputRebindResult(true, conflict);
+    }
+
+    /// <summary>Returns the colliding action in the same playable input context, if any.</summary>
+    public static string? FindConflict(string action, Key physicalKey)
+    {
+        string scope = InputActions.ConflictScope(action);
+        foreach (var (candidate, _) in InputActions.Rebindable)
+        {
+            if (candidate.Equals(action, System.StringComparison.OrdinalIgnoreCase)
+                || InputActions.ConflictScope(candidate) != scope)
+            {
+                continue;
+            }
+
+            if (GetBoundKey(candidate) == physicalKey)
+            {
+                return candidate;
+            }
+        }
+        return null;
+    }
+
+    /// <summary>Restores every keyboard binding from the central defaults and clears the persisted file.</summary>
+    public static void RestoreDefaults()
+    {
+        foreach (var (action, _) in InputActions.Rebindable)
+        {
+            RemoveKeyboardBinding(action);
+            if (InputActions.DefaultKeyboard.TryGetValue(action, out var key))
+            {
+                InputMap.ActionAddEvent(action, new InputEventKey { PhysicalKeycode = key });
+            }
+        }
         Save();
     }
 
@@ -92,4 +137,24 @@ public static class InputRebindStore
             InputMap.ActionAddEvent(action, new InputEventKey { PhysicalKeycode = key });
         }
     }
+
+    private static void RemoveKeyboardBinding(string action)
+    {
+        if (!InputMap.HasAction(action)) return;
+        foreach (var ev in new List<InputEvent>(InputMap.ActionGetEvents(action)))
+        {
+            if (ev is InputEventKey)
+            {
+                InputMap.ActionEraseEvent(action, ev);
+            }
+        }
+    }
 }
+
+public enum InputConflictResolution
+{
+    Reject,
+    Replace,
+}
+
+public readonly record struct InputRebindResult(bool Applied, string? ConflictingAction);
